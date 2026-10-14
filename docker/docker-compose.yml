@@ -1,0 +1,113 @@
+services:
+  # ── Certificate Authority (runs once, populates /certs volume) ──────────
+  ca:
+    build:
+      context: ..
+      dockerfile: docker/ca/Dockerfile
+    volumes:
+      - certs:/certs
+
+  # ── Shared key pool between KMEs ─────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    networks:
+      - qkd-net
+
+  # ── KME-A: Serves Client (Master SAE) ────────────────────────────────────
+  kme-a:
+    build:
+      context: ..
+      dockerfile: docker/kme/Dockerfile
+    environment:
+      KME_ID: KME-A
+      PEER_KME_ID: KME-B
+      MASTER_SAE_ID: client-sae
+      REDIS_HOST: redis
+      KEY_SIZE_BITS: "256"
+      MAX_POOL_SIZE: "10"
+      REFILL_RATE: "2"
+      ENABLE_CHALLENGE: "false"
+      START_REFILL: "true"
+    networks:
+      - qkd-net
+    depends_on:
+      - redis
+
+  # ── KME-B: Serves Server (Slave SAE) ────────────────────────────────────
+  kme-b:
+    build:
+      context: ..
+      dockerfile: docker/kme/Dockerfile
+    environment:
+      KME_ID: KME-B
+      PEER_KME_ID: KME-A
+      MASTER_SAE_ID: client-sae
+      REDIS_HOST: redis
+      KEY_SIZE_BITS: "256"
+      MAX_POOL_SIZE: "10"
+      REFILL_RATE: "2"
+      ENABLE_CHALLENGE: "true"
+      CA_CERT_FILE: /certs/ca.crt
+      START_REFILL: "false"
+    volumes:
+      - certs:/certs:ro
+    networks:
+      - qkd-net
+    depends_on:
+      ca:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+
+  # ── SSH Server (Slave SAE) ──────────────────────────────────────────────
+  server:
+    build:
+      context: ..
+      dockerfile: docker/server/Dockerfile
+    environment:
+      SSH_PORT: "2222"
+      SERVER_SAE_ID: server-sae
+      KME_URL: http://kme-b:8000
+      HOST_KEY_PATH: /certs/host_rsa_key
+      SERVER_CERT_FILE: /certs/server_ca.crt
+      SERVER_KEY_FILE: /certs/server_ca.key
+      AUTHORIZED_USERS: "client-sae:secret"
+    volumes:
+      - certs:/certs:ro
+    networks:
+      - qkd-net
+    depends_on:
+      ca:
+        condition: service_completed_successfully
+      kme-b:
+        condition: service_started
+
+  # ── SSH Client (Master SAE) ──────────────────────────────────────────────
+  client:
+    build:
+      context: ..
+      dockerfile: docker/client/Dockerfile
+    environment:
+      SSH_HOST: server
+      SSH_PORT: "2222"
+      SSH_USERNAME: client-sae
+      TARGET_SAE_ID: server-sae
+      KME_URL: http://kme-a:8000
+      SSH_PASSWORD: secret
+      QKD_MIN_AVAILABLE_KEYS: "2"
+    volumes:
+      - certs:/certs:ro
+    networks:
+      - qkd-net
+    depends_on:
+      server:
+        condition: service_started
+      kme-a:
+        condition: service_started
+
+volumes:
+  certs:
+
+networks:
+  qkd-net:
+    driver: bridge
