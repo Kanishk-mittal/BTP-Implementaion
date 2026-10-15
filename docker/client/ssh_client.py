@@ -10,7 +10,10 @@ import time
 import paramiko
 from paramiko.kex_qkd import KexQKD, QKDConfig
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+is_verbose = os.getenv("VERBOSE", "1").lower() in ("1", "true", "yes")
+log_level = logging.DEBUG if is_verbose else logging.INFO
+logging.basicConfig(level=log_level, format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s")
+logging.getLogger("paramiko").setLevel(log_level)
 
 def main():
     host = os.getenv("SSH_HOST", "server")

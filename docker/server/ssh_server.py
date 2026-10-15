@@ -2,6 +2,7 @@
 """
 QKD-secured SSH Server using upgraded paramiko.
 """
+import logging
 import os
 import socket
 import subprocess
@@ -10,6 +11,13 @@ import threading
 
 import paramiko
 from paramiko.kex_qkd import QKDConfig
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(name)s] [%(levelname)s] %(message)s",
+    stream=sys.stdout
+)
+logging.getLogger("paramiko").setLevel(logging.DEBUG)
 
 auth_map = {}
 for pair in os.getenv("AUTHORIZED_USERS", "client-sae:secret").split(","):

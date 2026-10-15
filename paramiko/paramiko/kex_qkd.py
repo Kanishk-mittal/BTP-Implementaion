@@ -31,7 +31,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
-from paramiko.common import byte_chr
+from paramiko.common import byte_chr, DEBUG
 from paramiko.message import Message
 from paramiko.ssh_exception import SSHException
 
@@ -573,6 +573,9 @@ class KexQKD:
         c_init = self.key_id.encode("utf-8")
         self._c_init = c_init
 
+        self.transport._log(DEBUG, f"QKD: Retrieved quantum key {self.key_id[:8]}... from KME-A ({self.config.kme_url})")
+        self.transport._log(DEBUG, f"QKD: Sending SSH_MSG_KEX_QKD_INIT (key_ID={self.key_id}, master={master_sae_id}, slave={slave_sae_id})")
+
         m = Message()
         m.add_byte(c_MSG_KEX_QKD_INIT)
         m.add_string(c_init)
@@ -618,6 +621,9 @@ class KexQKD:
         self.master_sae_id = master_sae_id
         self.slave_sae_id = slave_sae_id
 
+        self.transport._log(DEBUG, f"QKD: Server received SSH_MSG_KEX_QKD_INIT (key_ID={key_id}, master={master_sae_id}, slave={slave_sae_id})")
+        self.transport._log(DEBUG, f"QKD: Requesting challenge and fetching key material from KME-B...")
+
         # Server mode: Slave SAE retrieves identical key from local KME using received master_sae_id
         # (with challenge-response authentication if server cert/key are configured)
         try:
@@ -643,6 +649,8 @@ class KexQKD:
             raise SSHException(f"Failed to base64-decode QKD key on server: {exc}") from exc
 
         self.qkd_key = K_bytes
+        self.transport._log(DEBUG, f"QKD: Successfully retrieved & verified quantum key from KME-B ({len(K_bytes)*8} bits)")
+        self.transport._log(DEBUG, f"QKD: Computing exchange hash H and sending SSH_MSG_KEX_QKD_REPLY...")
 
         # Server generates a random 32-byte nonce as confirmation/reply payload
         s_reply = os.urandom(32)

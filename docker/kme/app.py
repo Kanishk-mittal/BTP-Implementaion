@@ -13,6 +13,7 @@ Environment variables:
   CA_CERT_FILE       Path to CA cert for verifying SAE identities
 """
 import base64
+import json
 import os
 import threading
 import time
@@ -49,7 +50,8 @@ def _refill_loop():
                 key_bytes = os.urandom(KEY_SIZE_BITS // 8)
                 key_b64 = base64.b64encode(key_bytes).decode("ascii")
                 r.set(KEY_HASH_PFX + kid, key_b64)
-                r.rpush(POOL_LIST, kid)
+                new_len = r.rpush(POOL_LIST, kid)
+                print(f"[QKD-REFILL] + Generated key {kid[:8]}... | Pool size: {new_len}/{MAX_POOL} (refill interval: {interval:.1f}s)", flush=True)
         except Exception as e:
             app.logger.warning(f"Error in refill loop: {e}")
         time.sleep(interval)
@@ -58,6 +60,48 @@ def _refill_loop():
 if os.getenv("START_REFILL", "true").lower() in ("1", "true", "yes"):
     t = threading.Thread(target=_refill_loop, daemon=True)
     t.start()
+
+# ── Detailed API Request / Response Logging ──────────────────────────────
+
+@app.before_request
+def log_request_info():
+    if request.path == "/favicon.ico":
+        return
+    kme_name = os.getenv("KME_ID", "KME")
+    payload = request.get_json(silent=True)
+    body_str = ""
+    if payload:
+        clean_p = dict(payload)
+        if "sae_cert" in clean_p:
+            clean_p["sae_cert"] = f"<X.509 PEM base64 {len(clean_p['sae_cert'])} chars>"
+        if "challenge_response" in clean_p:
+            clean_p["challenge_response"] = f"<Signature {clean_p['challenge_response'][:20]}...>"
+        body_str = f" | Payload: {json.dumps(clean_p)}"
+    elif request.args:
+        body_str = f" | Args: {dict(request.args)}"
+    print(f"[{kme_name}] >>> {request.method} {request.path} (from {request.remote_addr}){body_str}", flush=True)
+
+@app.after_request
+def log_response_info(response):
+    if request.path == "/favicon.ico":
+        return response
+    kme_name = os.getenv("KME_ID", "KME")
+    try:
+        data = response.get_json()
+        if data:
+            data_preview = dict(data)
+            if "keys" in data_preview:
+                keys_preview = []
+                for k in data_preview["keys"]:
+                    key_val = k.get("key", "")
+                    keys_preview.append({"key_ID": k.get("key_ID"), "key": f"{key_val[:8]}... (256-bit secret)"})
+                data_preview["keys"] = keys_preview
+            print(f"[{kme_name}] <<< {response.status} {request.path} | Response: {json.dumps(data_preview)}", flush=True)
+        else:
+            print(f"[{kme_name}] <<< {response.status} {request.path}", flush=True)
+    except Exception:
+        print(f"[{kme_name}] <<< {response.status} {request.path}", flush=True)
+    return response
 
 # ── ETSI GS QKD 014 endpoints ─────────────────────────────────────────────
 
@@ -89,6 +133,8 @@ def enc_keys(slave_sae_id):
     key_b64 = r.get(KEY_HASH_PFX + kid)
     if not key_b64:
         return jsonify({"message": f"Key data for {kid} not found"}), 500
+    rem = r.llen(POOL_LIST)
+    print(f"[KME-A] Pop/Deliver key {kid[:8]}... to {slave_sae_id} | Remaining in pool: {rem}/{MAX_POOL}", flush=True)
     # Key bytes remain in Redis until Slave KME dec_keys retrieves + deletes them
     return jsonify({"keys": [{"key_ID": kid, "key": key_b64}]})
 
@@ -164,6 +210,7 @@ def dec_keys(master_sae_id):
         key_b64 = r.getdel(KEY_HASH_PFX + kid)  # atomically retrieve + delete
         if not key_b64:
             return jsonify({"message": f"one or more keys specified are not found on KME"}), 400
+        print(f"[KME-B] Challenge verified for {master_sae_id}. Key {kid[:8]}... permanently consumed and deleted from storage.", flush=True)
         results.append({"key_ID": kid, "key": key_b64})
 
     return jsonify({"keys": results})
