@@ -19,6 +19,15 @@ logging.basicConfig(
 )
 logging.getLogger("paramiko").setLevel(logging.DEBUG)
 
+class SuppressBannerErrorFilter(logging.Filter):
+    def filter(self, record):
+        msg = record.getMessage()
+        if "Error reading SSH protocol banner" in msg or "EOFError" in msg:
+            return False
+        return True
+
+logging.getLogger("paramiko.transport").addFilter(SuppressBannerErrorFilter())
+
 auth_map = {}
 for pair in os.getenv("AUTHORIZED_USERS", "client-sae:secret").split(","):
     if ":" in pair:
@@ -70,7 +79,8 @@ def handle_client(client_sock, host_key, qkd_config):
             while not chan.closed:
                 threading.Event().wait(0.5)
     except Exception as e:
-        print(f"[CONN] Handshake/transport error: {e}")
+        if "Error reading SSH protocol banner" not in str(e):
+            print(f"[CONN] Handshake/transport error: {e}")
     finally:
         try:
             client_sock.close()

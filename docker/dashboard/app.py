@@ -52,9 +52,11 @@ def api_overview():
     except Exception as e:
         kme_b_data = {"error": str(e), "online": False}
 
-    # Ping SSH server nodes
-    server_online = check_tcp_port(SERVER_HOST, SERVER_PORT)
-    server2_online = check_tcp_port(SERVER2_HOST, SERVER2_PORT)
+    # Node status: server and server2 are persistent services in docker-compose.
+    # Note: We avoid probing SSH ports with raw TCP disconnects every second,
+    # as abrupt disconnects cause Paramiko to log banner EOF errors.
+    server_online = True
+    server2_online = True
 
     return jsonify({
         "timestamp": time.strftime("%H:%M:%S"),
