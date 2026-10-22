@@ -1,5 +1,5 @@
 # ETSI GS QKD 014 Quantum Key Distribution for SSH (Paramiko)
-## 2-Terminal Live Demonstration & Project Evaluation Guide
+## v2 Demonstration Guide: Real-Time Web Dashboard & Heterogeneous Multi-Node Fallback
 
 ---
 
@@ -7,99 +7,110 @@
 
 This project integrates the **ETSI GS QKD 014** (Quantum Key Distribution: Application Interface) REST specification into the SSH transport protocol using an upgraded **Paramiko** library.
 
-Instead of classical asymmetric key exchange (Diffie-Hellman / ECDH) which is vulnerable to quantum computers running Shor's algorithm, the SSH transport establishes a shared symmetric root secret $K$ derived from local Quantum Key Management Entities (**KME-A** and **KME-B**), backed by PKI challenge-response authentication and automatic graceful fallback.
+In this **v2 architecture**, we introduce:
+1. **Interactive Real-Time Web Dashboard** (`http://localhost:5000`): Visualizes live key pool meters, KME-A & KME-B individual telemetry, security challenge-response rates, and real-time streaming protocol logs.
+2. **Heterogeneous Network Support**: Demonstrates how QKD-capable clients interact with both **QKD-enabled nodes** (`server`) and **legacy/classical nodes without a KME** (`server2`), showing seamless protocol-level fallback without dropping connections.
 
 ---
 
 ## 🏛️ System Architecture
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    participant Client as Terminal 2: SSH Client<br/>(Master SAE)
-    participant KMEA as KME-A<br/>(Master KME)
-    participant Channel as Quantum Channel<br/>(Redis Sync)
-    participant KMEB as KME-B<br/>(Slave KME)
-    participant Server as Terminal 1: SSH Server<br/>(Slave SAE)
+flowchart TD
+    subgraph ClientHost["SSH Client (Master SAE)"]
+        Client["Paramiko SSH Client<br/>(Master SAE: client-sae)"]
+    end
 
-    Note over KMEA,KMEB: Simulated Quantum Channel: continuous key generation (1 key / 5s, max: 10)
-    KMEA->>Channel: Sync generated 256-bit keys
-    Channel->>KMEB: Deliver synchronized keys
+    subgraph QKD_Infrastructure["Quantum Key Distribution Layer"]
+        KMEA["KME-A (Master)<br/>ETSI GS QKD 014 REST<br/>Port 8000"]
+        QLink["Simulated Quantum Channel<br/>(Redis Sync - 1 key / 5s)"]
+        KMEB["KME-B (Slave)<br/>ETSI GS QKD 014 + Auth Gate<br/>Port 8001"]
+        KMEA <-->|Continuous Key Sync| QLink
+        QLink <-->|Continuous Key Sync| KMEB
+    end
 
-    Note over Client,Server: Step 1: Pre-Handshake Status & Key Retrieval
-    Client->>KMEA: GET /api/v1/keys/server-sae/status
-    KMEA-->>Client: 200 OK (stored_key_count: 10)
-    Client->>KMEA: POST /api/v1/keys/server-sae/enc_keys
-    KMEA-->>Client: 200 OK (key_ID: uuid, key: 256-bit secret)
+    subgraph Server_Nodes["SSH Server Nodes"]
+        Server1["SSH Server 1 (QKD-Enabled)<br/>Slave SAE: server-sae<br/>KME-B Attached (Port 2222)"]
+        Server2["SSH Server 2 (No-KME Legacy Node)<br/>No KME Attached<br/>Classical / PQC Only (Port 2223)"]
+    end
 
-    Note over Client,Server: Step 2: SSH Transport Handshake (qkd-etsi014-sha256)
-    Client->>Server: SSH_MSG_KEX_QKD_INIT (key_ID, client-sae, server-sae)
+    subgraph Dashboard_Layer["Web Telemetry"]
+        Dash["Web Dashboard (Port 5000)<br/>Aggregates KME Telemetry & Real-Time Logs"]
+    end
 
-    Note over Server,KMEB: Step 3: Server Challenge-Response Authentication with KME-B
-    Server->>KMEB: GET /api/v1/keys/challenge
-    KMEB-->>Server: 200 OK (challenge_id, challenge_nonce)
-    Note over Server: Sign nonce with CA-certified Private Key
-    Server->>KMEB: POST /api/v1/keys/client-sae/dec_keys (key_ID, challenge_response, sae_cert)
-    Note over KMEB: Verify X.509 cert against Root CA & Verify ECDSA signature
-    KMEB-->>Server: 200 OK (key: 256-bit secret) & Atomically Purge Key
+    Client -->|1. GET /status & /enc_keys| KMEA
+    Client -->|2. SSH_MSG_KEX_QKD_INIT| Server1
+    Server1 -->|3. GET /challenge & /dec_keys| KMEB
+    KMEB -->|4. Deliver & GETDEL| Server1
 
-    Server->>Client: SSH_MSG_KEX_QKD_REPLY (server_host_key, H_signature)
-    Note over Client,Server: Step 4: Shared Secret K Derived & Session Encrypted
+    Client -.->|Classical Fallback: mlkem768x25519-sha256| Server2
+
+    KMEA -.-> Dash
+    KMEB -.-> Dash
+    Server1 -.-> Dash
+    Server2 -.-> Dash
 ```
 
 ---
 
-## 🖥️ Demonstration Setup: The 2-Terminal Workflow
+## 🖥️ Demonstration Workflow
 
-Only **two terminals** are needed:
+You can run the demonstration using **the Web Dashboard alongside your terminal sessions**:
 
 ```
-┌──────────────────────────────────────────────┬──────────────────────────────────────────────┐
-│  TERMINAL 1: Real-Time Live Server & KME Logs │  TERMINAL 2: Interactive Presenter Terminal  │
-│                                              │                                              │
-│  $ cd docker                                 │  $ cd docker                                 │
-│  $ docker compose up                         │  $ docker compose run --rm client            │
-│                                              │                                              │
-│  Streams real-time color-coded logs:         │  Runs the QKD-secured SSH client, shows      │
-│  • KME-A: Incoming REST calls & delivered key│  handshake negotiation and executes commands │
-│  • KME-B: Challenge nonces, PKI validation,  │                                              │
-│    and one-time key consumption via GETDEL   │  Or test automatic fallback:                 │
-│  • Server: Verbose Paramiko DEBUG packets    │  $ docker compose run --no-deps --rm         │
-│    (KEXINIT, QKD_INIT, NEWKEYS, AUTH, EXEC)  │    -e QKD_MIN_AVAILABLE_KEYS=20 client      │
-└──────────────────────────────────────────────┴──────────────────────────────────────────────┘
+┌───────────────────────────────────────┬────────────────────────────────────────────────────────┐
+│  🌐 WEB BROWSER: Live Web Dashboard    │  💻 TERMINALS: Commands & Live Logs                   │
+│                                       │                                                        │
+│  http://localhost:5000                │  Terminal 1: $ cd docker && docker compose up          │
+│                                       │  (Streams background logs for all services)            │
+│  • Visual 10-slot Quantum Key Pool    │                                                        │
+│  • KME-A (Master) telemetry & logs    │  Terminal 2: Interactive Commands:                     │
+│  • KME-B (Slave) security gate logs   │  1. QKD Connection:                                    │
+│  • Node status (Server 1 vs Server 2) │     $ docker compose run --rm client                   │
+│                                       │  2. Classical Node Fallback (No KME):                  │
+│                                       │     $ docker compose run --rm client-server2           │
+│                                       │  3. Key Exhaustion Fallback:                           │
+│                                       │     $ docker compose run --no-deps --rm                │
+│                                       │       -e QKD_MIN_AVAILABLE_KEYS=20 client              │
+└───────────────────────────────────────┴────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🎬 Step-by-Step Live Demonstration
+## 🎬 Step-by-Step Live Demonstration Script
 
-### 1. Terminal 1: Start All Services & Stream Real-Time Logs
+### Step 1: Start Infrastructure & Open Dashboard
 
-In your first terminal:
+In **Terminal 1**:
 
 ```bash
 cd /home/kanishk/data/BTP/Implementation/docker
 docker compose up
 ```
 
-> **What happens:**
-> - `ca` initializes the Root CA, generates X.509 certificates and SSH host keys, then cleanly exits.
-> - `redis`, `kme-a`, `kme-b`, and `server` start in the foreground.
-> - `client` is registered under the `client` profile, so it will wait until you trigger it from Terminal 2.
-> - Terminal 1 now streams real-time, color-coded logs for all components.
+Open your browser to:
+👉 **`http://localhost:5000`**
+
+**What to highlight on screen:**
+- **System Overview Tab**:
+  - Live node indicators showing `Server 1 (QKD-Enabled)` and `Server 2 (No-KME Fallback Node)`.
+  - The **Quantum Key Pool Meter** glowing with 10 available 256-bit keys.
+- **KME-A Tab**:
+  - ETSI GS QKD 014 parameters (`source_KME_ID: KME-A`, `target_KME_ID: KME-B`, `key_size: 256`).
+- **KME-B Tab**:
+  - Security gate metrics (Challenges Issued, Signatures Verified, Keys Consumed via `GETDEL`).
 
 ---
 
-### 2. Terminal 2 (Demonstration Part A): Standard QKD-Secured SSH Connection
+### Step 2: Test 1 — Quantum-Secured SSH Connection (Server 1)
 
-In your second terminal:
+In **Terminal 2**, run:
 
 ```bash
-cd /home/kanishk/data/BTP/Implementation/docker
 docker compose run --rm client
 ```
 
-#### What You Will See in Terminal 2 (Client):
+#### Terminal 2 Output:
 ```text
 ==================================================
       Connecting via QKD-secured Paramiko SSH     
@@ -109,154 +120,121 @@ docker compose run --rm client
  Client KME URL:          http://kme-a:8000
  Min Key Pool Threshold:  2
 ==================================================
-[DEBUG] kex algos: qkd-etsi014-sha256, mlkem768x25519-sha256, curve25519-sha256...
-[DEBUG] Strict kex mode: True
 [DEBUG] Kex: qkd-etsi014-sha256
-[DEBUG] QKD: Retrieved quantum key b89b92fd... from KME-A (http://kme-a:8000)
-[DEBUG] QKD: Sending SSH_MSG_KEX_QKD_INIT (key_ID=b89b92fd-..., master=client-sae, slave=server-sae)
+[DEBUG] QKD: Retrieved quantum key d426b625... from KME-A (http://kme-a:8000)
+[DEBUG] QKD: Sending SSH_MSG_KEX_QKD_INIT (key_ID=d426b625-..., master=client-sae, slave=server-sae)
 [DEBUG] Switch to new keys ...
 [INFO] Authentication (password) successful!
 
 [SUCCESS] Successfully connected!
 [SECURITY] Key Exchange Algorithm Negotiated: qkd-etsi014-sha256
 [STATUS] Connection is Quantum Key Distribution (QKD) SECURED! 🛡️
+         Root secret derived from ETSI GS QKD 014 Quantum Key material.
 
 --- Command Output ---
 Linux ... x86_64 GNU/Linux
 QKD SSH Session Verification OK
-
-[INFO] SSH connection closed cleanly.
 ```
 
-#### What Lights Up in Terminal 1 (Real-Time Infrastructure Logs):
-Show the panel the simultaneous log stream in Terminal 1:
-
-1. **KME-A Status & Key Delivery**:
-   ```text
-   kme-a-1  | [KME-A] >>> GET /api/v1/keys/server-sae/status (from 172.21.0.6)
-   kme-a-1  | [KME-A] <<< 200 OK /api/v1/keys/server-sae/status | Response: {"stored_key_count": 10, ...}
-   kme-a-1  | [KME-A] >>> POST /api/v1/keys/server-sae/enc_keys (from 172.21.0.6) | Payload: {"number": 1, "size": 256}
-   kme-a-1  | [KME-A] Pop/Deliver key b89b92fd... to server-sae | Remaining in pool: 9/10
-   kme-a-1  | [KME-A] <<< 200 OK /api/v1/keys/server-sae/enc_keys | Response: {"keys": [{"key_ID": "b89b92fd...", "key": "<256-bit secret>"}]}
-   ```
-
-2. **Server Handshake & KME-B Challenge-Response Authentication**:
-   ```text
-   server-1 | [DEBUG] Kex: qkd-etsi014-sha256
-   server-1 | [DEBUG] QKD: Server received SSH_MSG_KEX_QKD_INIT (key_ID=b89b92fd-..., master=client-sae, slave=server-sae)
-   server-1 | [DEBUG] QKD: Requesting challenge and fetching key material from KME-B...
-   kme-b-1  | [KME-B] >>> GET /api/v1/keys/challenge (from 172.21.0.5)
-   kme-b-1  | [KME-B] <<< 200 OK /api/v1/keys/challenge | Response: {"challenge_id": "c6a5a990...", "challenge": "..."}
-   kme-b-1  | [KME-B] >>> POST /api/v1/keys/client-sae/dec_keys | Payload: {"key_IDs": ["b89b92fd..."], "challenge_response": "<Signature ...>", "sae_cert": "<X.509 PEM>"}
-   kme-b-1  | [KME-B] Challenge verified for client-sae. Key b89b92fd... permanently consumed and deleted from storage.
-   server-1 | [DEBUG] QKD: Successfully retrieved & verified quantum key from KME-B (256 bits)
-   server-1 | [DEBUG] QKD: Computing exchange hash H and sending SSH_MSG_KEX_QKD_REPLY...
-   server-1 | [DEBUG] Switch to new keys ...
-   server-1 | [AUTH] User 'client-sae' authenticated successfully via password.
-   server-1 | [EXEC] Executing command: uname -a && echo 'QKD SSH Session Verification OK'
-   ```
-
-3. **Background Optical Key Replenishment**:
-   ```text
-   kme-a-1  | [QKD-REFILL] + Generated key 2f54ed7f... | Pool size: 10/10 (refill interval: 5.0s)
-   ```
-
-👉 **Talking Points for Evaluators:**
-- The key was never computed via mathematical assumptions (like discrete logs) or sent over the classical network.
-- Both ends fetched the identical 256-bit symmetric key from their respective local KMEs.
-- The key was **atomically consumed and permanently destroyed (`GETDEL`)** upon handshake completion.
+#### What to Show in the Dashboard & Terminal 1:
+1. **Key Pool Decrement**: Watch Slot 10 change as `stored_key_count` drops from `10` to `9`.
+2. **KME-A Log**: Shows `Pop/Deliver key d426b625... to server-sae | Remaining: 9/10`.
+3. **KME-B Log**: Shows `Challenge verified for client-sae. Key d426b625... consumed & deleted (one-time-use)`.
+4. **Replenishment**: After 5 seconds, watch the 10th slot light back up as `[QKD-REFILL]` generates a fresh key.
 
 ---
 
-### 3. Terminal 2 (Demonstration Part B): Graceful Fallback Demonstration
+### Step 3: Test 2 — Communicating with a Node Without a KME (Server 2)
 
-A common question from evaluators is: *"What happens if the quantum channel is jammed or the key pool is depleted?"*
+Evaluators frequently ask: *"What happens if a client connects to a server that doesn't have a QKD link?"*
 
-In **Terminal 2**, run the client with a minimum pool requirement of 20 keys (when pool capacity is 10):
+In **Terminal 2**, run:
 
 ```bash
-docker compose run --no-deps --rm -e QKD_MIN_AVAILABLE_KEYS=20 client
+docker compose run --rm client-server2
 ```
 
-#### What You Will See in Terminal 2 (Client):
+#### Terminal 2 Output:
 ```text
 ==================================================
       Connecting via QKD-secured Paramiko SSH     
- Target Host: server:2222
+ Target Host: server2:2222
  Master SAE ID (Username): client-sae
  Slave SAE ID (Target):   server-sae
  Client KME URL:          http://kme-a:8000
- Min Key Pool Threshold:  20
+ Min Key Pool Threshold:  2
 ==================================================
-[WARNING] [QKD] Key pool has 10 key(s) (min threshold: 20) — falling back to classical key exchange
+[DEBUG] kex algos: mlkem768x25519-sha256, curve25519-sha256@libssh.org, ...
 [DEBUG] Kex: mlkem768x25519-sha256
 [DEBUG] Switch to new keys ...
 [INFO] Authentication (password) successful!
 
 [SUCCESS] Successfully connected!
 [SECURITY] Key Exchange Algorithm Negotiated: mlkem768x25519-sha256
-[STATUS] Connection fell back to classical key exchange.
+[STATUS] Connection fell back to classical/PQC key exchange.
+         Target 'server2' does not negotiate QKD or keys were unavailable.
+         Successfully established encrypted session using: mlkem768x25519-sha256
 
 --- Command Output ---
 Linux ... x86_64 GNU/Linux
 QKD SSH Session Verification OK
 ```
 
-👉 **Talking Points for Evaluators:**
+#### What to Explain to the Evaluators:
+- **Zero Configuration Burden**: The client did not require manual reconfiguration. It proposed `qkd-etsi014-sha256` first in its algorithm list.
+- **Server2 lacks a KME**: Server2 does not offer `qkd-etsi014-sha256` in its `SSH_MSG_KEXINIT`.
+- **Standard Protocol Negotiation**: The SSH key exchange negotiation automatically resolved to the next mutually agreed algorithm: **`mlkem768x25519-sha256`** (Post-Quantum ML-KEM/Kyber hybrid) or `curve25519-sha256`.
+- **Full Interoperability**: Demonstrates that our upgraded Paramiko is 100% backward-compatible with non-QKD infrastructure!
+
+---
+
+### Step 4: Test 3 — Key Pool Depletion Fallback (Threshold Policy)
+
+What if the target node *has* a KME, but the key pool is temporarily empty or below safety margins?
+
+In **Terminal 2**, run with `QKD_MIN_AVAILABLE_KEYS=20` (pool holds max 10):
+
+```bash
+docker compose run --no-deps --rm -e QKD_MIN_AVAILABLE_KEYS=20 client
+```
+
+#### Output:
+```text
+[WARNING] [QKD] Key pool has 10 key(s) (min threshold: 20) — falling back to classical key exchange
+[SECURITY] Key Exchange Algorithm Negotiated: mlkem768x25519-sha256
+[STATUS] Connection fell back to classical key exchange.
+```
+
+**Talking Point:**
 - Prior to handshake initiation, Paramiko queries the ETSI GS QKD 014 status endpoint (`/status`).
-- If available keys fall below the configured policy threshold, Paramiko emits a warning and **gracefully falls back** to the next best available algorithm (`mlkem768x25519-sha256` or `curve25519-sha256`).
-- The connection completes without interruption, ensuring high availability.
+- If stored keys are below the configured threshold, Paramiko emits a warning and safely negotiates classical/PQC ciphers, preventing handshake timeouts or service disruptions.
 
 ---
 
-## 🔬 Protocol & Cryptographic Specifications
+## 🎓 Oral Defense / Viva Q&A Cheat Sheet (v2 Specific)
 
-### Custom SSH Messages
+### Q1: How does the system distinguish between a QKD server and a non-QKD server?
+> **Answer:** Through standard SSH algorithm negotiation (`SSH_MSG_KEXINIT`). The QKD-enabled server registers `qkd-etsi014-sha256` in its `preferred_kex` list because its `qkd_config` is set. The non-QKD server (`server2`) has `qkd_config=None`, which automatically excludes `qkd-etsi014-sha256` from its advertised KEX list. When the client connects, standard RFC 4253 intersection negotiation selects the first mutually supported algorithm (`mlkem768x25519-sha256` or `curve25519-sha256`).
 
-| Message Code | Constant Name | Payload Structure |
-|---|---|---|
-| `30` | `SSH_MSG_KEX_QKD_INIT` | `string key_id`, `string master_sae_id`, `string slave_sae_id` |
-| `31` | `SSH_MSG_KEX_QKD_REPLY` | `string server_host_key`, `string signature_of_H` |
+### Q2: Why is the challenge-response authentication necessary at KME-B?
+> **Answer:** In ETSI GS QKD 014, KME-A delivers keys to the Master SAE, while KME-B delivers keys to the Slave SAE upon receiving `key_ID`. If KME-B released key material without authentication, any rogue entity that guessed or intercepted a `key_ID` over the network could query KME-B's `/dec_keys` endpoint and steal the quantum key. Our implementation forces the server to prove ownership of a CA-certified private key by signing an ephemeral nonce before KME-B releases the key.
 
-### Exchange Hash ($H$) Computation
-
-To bind the session context and prevent Man-in-the-Middle (MITM) attacks, the exchange hash $H$ is computed as:
-
-$$H = \text{SHA-256}(V_C \,\|\, V_S \,\|\, I_C \,\|\, I_S \,\|\, K_S \,\|\, \text{key\_id} \,\|\, K)$$
-
-Where:
-- $V_C, V_S$: Client and Server identification strings (e.g. `SSH-2.0-paramiko_5.0.0`).
-- $I_C, I_S$: Client and Server `SSH_MSG_KEXINIT` packets.
-- $K_S$: Server's public host key.
-- $\text{key\_id}$: UUID of the quantum key negotiated via ETSI GS QKD 014.
-- $K$: 256-bit symmetric quantum key material treated as the shared secret integer (`mpint`).
-
----
-
-## 🎓 Oral Defense / Viva Q&A Cheat Sheet
-
-### Q1: Why use QKD over SSH instead of standard Post-Quantum Cryptography (PQC)?
-> **Answer:** PQC algorithms (e.g. ML-KEM/Kyber) rely on mathematical complexity assumptions (e.g. Learning With Errors). While resistant to known quantum attacks, their security is computational and not proven unconditionally. QKD relies on the fundamental physics of quantum mechanics (Heisenberg Uncertainty Principle and No-Cloning Theorem), providing **Information-Theoretic Security (ITS)**. Our system provides hybrid resilience: ITS quantum keys when available, with automatic fallback to PQC (`mlkem768x25519-sha256`).
-
-### Q2: What prevents an attacker from intercepting the `key_ID` on the classical network and decrypting the traffic?
-> **Answer:** The `key_ID` is merely a reference UUID, not the key material itself. The actual 256-bit key is never sent across the network; it resides only inside KME-A and KME-B. Furthermore, KME-B enforces strict challenge-response authentication: an entity requesting the key for that `key_ID` must prove ownership of a valid X.509 certificate signed by the Root CA by signing a cryptographically fresh nonce. Once delivered, the key is permanently deleted from Redis (`getdel`), preventing replay.
-
-### Q3: How was ETSI GS QKD 014 integrated into Paramiko?
-> **Answer:**
-> 1. Implemented `paramiko/kex_qkd.py` providing the `KexQKD` class conforming to the Paramiko KEX engine interface.
-> 2. Added client & server handlers for SSH message numbers `30` (`SSH_MSG_KEX_QKD_INIT`) and `31` (`SSH_MSG_KEX_QKD_REPLY`).
-> 3. Registered `qkd-etsi014-sha256` as the highest priority KEX method in `Transport._preferred_kex`.
-> 4. Added proactive status checks and threshold-based fallback in `client.py`.
+### Q3: How is key forward secrecy guaranteed?
+> **Answer:** By enforcing the One-Time-Pad property:
+> 1. In KME-A, the key is popped from the available pool upon delivery (`r.lpop`).
+> 2. In KME-B, the key is delivered and atomically deleted using Redis `GETDEL`.
+> 3. Even if an attacker compromises the server at a later time, past session keys cannot be re-fetched from either KME.
 
 ---
 
 ## 🧹 Quick Reset Commands
 
-To stop services and reset all volumes for a clean demonstration:
-
 ```bash
 cd /home/kanishk/data/BTP/Implementation/docker
 
-# Stop and wipe volume state (cleans certificates and keys)
+# Stop and wipe state (clears Redis key pool and CA certificates)
 docker compose down -v
+
+# Re-launch all background services and dashboard
+docker compose up -d
 ```

@@ -13,6 +13,7 @@ Environment variables:
   CA_CERT_FILE       Path to CA cert for verifying SAE identities
 """
 import base64
+import collections
 import json
 import os
 import threading
@@ -40,6 +41,31 @@ KEY_HASH_PFX = "qkd:key:"
 CHALL_PFX = "qkd:challenge:"
 CHALL_TTL_SECS = 30  # challenges expire in 30 seconds
 
+KME_ID = os.getenv("KME_ID", "KME")
+
+# ── In-memory log ring buffer for dashboard ──────────────────────────────────
+_log_lock = threading.Lock()
+_log_buffer = collections.deque(maxlen=200)
+_stats = {
+    "keys_delivered": 0,
+    "keys_consumed": 0,
+    "challenges_issued": 0,
+    "challenges_verified": 0,
+    "total_requests": 0,
+    "start_time": time.time(),
+}
+
+def _log(msg: str, level: str = "INFO"):
+    entry = {
+        "ts": time.strftime("%H:%M:%S"),
+        "level": level,
+        "msg": msg,
+    }
+    with _log_lock:
+        _log_buffer.append(entry)
+    print(f"[{KME_ID}] {entry['ts']} [{level}] {msg}", flush=True)
+
+
 def _refill_loop():
     interval = 1.0 / REFILL_RATE if REFILL_RATE > 0 else 0.5
     while True:
@@ -51,9 +77,9 @@ def _refill_loop():
                 key_b64 = base64.b64encode(key_bytes).decode("ascii")
                 r.set(KEY_HASH_PFX + kid, key_b64)
                 new_len = r.rpush(POOL_LIST, kid)
-                print(f"[QKD-REFILL] + Generated key {kid[:8]}... | Pool size: {new_len}/{MAX_POOL} (refill interval: {interval:.1f}s)", flush=True)
+                _log(f"+ Generated key {kid[:8]}... | Pool: {new_len}/{MAX_POOL} (interval: {interval:.1f}s)", "REFILL")
         except Exception as e:
-            app.logger.warning(f"Error in refill loop: {e}")
+            _log(f"Error in refill loop: {e}", "ERROR")
         time.sleep(interval)
 
 # Only start background refill on one of the KMEs or if master KME
@@ -65,9 +91,10 @@ if os.getenv("START_REFILL", "true").lower() in ("1", "true", "yes"):
 
 @app.before_request
 def log_request_info():
-    if request.path == "/favicon.ico":
+    if request.path.startswith(("/favicon.ico", "/dashboard")):
         return
-    kme_name = os.getenv("KME_ID", "KME")
+    with _log_lock:
+        _stats["total_requests"] += 1
     payload = request.get_json(silent=True)
     body_str = ""
     if payload:
@@ -76,16 +103,15 @@ def log_request_info():
             clean_p["sae_cert"] = f"<X.509 PEM base64 {len(clean_p['sae_cert'])} chars>"
         if "challenge_response" in clean_p:
             clean_p["challenge_response"] = f"<Signature {clean_p['challenge_response'][:20]}...>"
-        body_str = f" | Payload: {json.dumps(clean_p)}"
+        body_str = f" | Body: {json.dumps(clean_p)}"
     elif request.args:
         body_str = f" | Args: {dict(request.args)}"
-    print(f"[{kme_name}] >>> {request.method} {request.path} (from {request.remote_addr}){body_str}", flush=True)
+    _log(f">>> {request.method} {request.path} (from {request.remote_addr}){body_str}", "REQ")
 
 @app.after_request
 def log_response_info(response):
-    if request.path == "/favicon.ico":
+    if request.path.startswith(("/favicon.ico", "/dashboard")):
         return response
-    kme_name = os.getenv("KME_ID", "KME")
     try:
         data = response.get_json()
         if data:
@@ -94,13 +120,13 @@ def log_response_info(response):
                 keys_preview = []
                 for k in data_preview["keys"]:
                     key_val = k.get("key", "")
-                    keys_preview.append({"key_ID": k.get("key_ID"), "key": f"{key_val[:8]}... (256-bit secret)"})
+                    keys_preview.append({"key_ID": k.get("key_ID"), "key": f"{key_val[:8]}... (256-bit)"})
                 data_preview["keys"] = keys_preview
-            print(f"[{kme_name}] <<< {response.status} {request.path} | Response: {json.dumps(data_preview)}", flush=True)
+            _log(f"<<< {response.status} {request.path} | {json.dumps(data_preview)}", "RESP")
         else:
-            print(f"[{kme_name}] <<< {response.status} {request.path}", flush=True)
+            _log(f"<<< {response.status} {request.path}", "RESP")
     except Exception:
-        print(f"[{kme_name}] <<< {response.status} {request.path}", flush=True)
+        _log(f"<<< {response.status} {request.path}", "RESP")
     return response
 
 # ── ETSI GS QKD 014 endpoints ─────────────────────────────────────────────
@@ -134,7 +160,9 @@ def enc_keys(slave_sae_id):
     if not key_b64:
         return jsonify({"message": f"Key data for {kid} not found"}), 500
     rem = r.llen(POOL_LIST)
-    print(f"[KME-A] Pop/Deliver key {kid[:8]}... to {slave_sae_id} | Remaining in pool: {rem}/{MAX_POOL}", flush=True)
+    with _log_lock:
+        _stats["keys_delivered"] += 1
+    _log(f"Pop/Deliver key {kid[:8]}... to {slave_sae_id} | Pool remaining: {rem}/{MAX_POOL}", "KEY")
     # Key bytes remain in Redis until Slave KME dec_keys retrieves + deletes them
     return jsonify({"keys": [{"key_ID": kid, "key": key_b64}]})
 
@@ -150,6 +178,9 @@ def get_challenge():
     nonce = os.urandom(32)
     nonce_b64 = base64.b64encode(nonce).decode("ascii")
     r.set(CHALL_PFX + challenge_id, nonce_b64, ex=CHALL_TTL_SECS)
+    with _log_lock:
+        _stats["challenges_issued"] += 1
+    _log(f"Challenge issued: {challenge_id[:8]}... (30s TTL)", "CHALLENGE")
     return jsonify({"challenge": nonce_b64, "challenge_id": challenge_id})
 
 # ── Modified dec_keys with challenge verification ─────────────────────────
@@ -185,6 +216,7 @@ def dec_keys(master_sae_id):
                 sae_cert.signature_hash_algorithm,
             )
         except Exception as e:
+            _log(f"Certificate verification failed for {master_sae_id}: {e}", "ERROR")
             return jsonify({"message": f"SAE certificate verification failed: {e}"}), 401
 
         # c. Verify the challenge signature using the SAE's cert public key
@@ -201,7 +233,11 @@ def dec_keys(master_sae_id):
                 hashes.SHA256(),
             )
         except Exception as e:
+            _log(f"Signature verification failed for {master_sae_id}: {e}", "ERROR")
             return jsonify({"message": f"Challenge signature verification failed: {e}"}), 401
+
+        with _log_lock:
+            _stats["challenges_verified"] += 1
 
     # Deliver key material (one-time use via GETDEL)
     results = []
@@ -210,10 +246,50 @@ def dec_keys(master_sae_id):
         key_b64 = r.getdel(KEY_HASH_PFX + kid)  # atomically retrieve + delete
         if not key_b64:
             return jsonify({"message": f"one or more keys specified are not found on KME"}), 400
-        print(f"[KME-B] Challenge verified for {master_sae_id}. Key {kid[:8]}... permanently consumed and deleted from storage.", flush=True)
+        with _log_lock:
+            _stats["keys_consumed"] += 1
+        _log(f"Challenge verified for {master_sae_id}. Key {kid[:8]}... consumed & deleted (one-time-use).", "KEY")
         results.append({"key_ID": kid, "key": key_b64})
 
     return jsonify({"keys": results})
+
+# ── Dashboard API endpoints (for the web dashboard) ────────────────────────
+
+@app.route("/dashboard/stats", methods=["GET"])
+def dashboard_stats():
+    """Live stats for the web dashboard."""
+    try:
+        pool_count = r.llen(POOL_LIST)
+    except Exception:
+        pool_count = 0
+    uptime_secs = int(time.time() - _stats["start_time"])
+    with _log_lock:
+        s = dict(_stats)
+    return jsonify({
+        "kme_id": KME_ID,
+        "peer_kme_id": os.getenv("PEER_KME_ID", ""),
+        "master_sae_id": os.getenv("MASTER_SAE_ID", ""),
+        "pool_size": pool_count,
+        "max_pool": MAX_POOL,
+        "pool_pct": round(pool_count / MAX_POOL * 100) if MAX_POOL else 0,
+        "key_size_bits": KEY_SIZE_BITS,
+        "refill_rate": REFILL_RATE,
+        "enable_challenge": ENABLE_CHALLENGE,
+        "keys_delivered": s["keys_delivered"],
+        "keys_consumed": s["keys_consumed"],
+        "challenges_issued": s["challenges_issued"],
+        "challenges_verified": s["challenges_verified"],
+        "total_requests": s["total_requests"],
+        "uptime_secs": uptime_secs,
+    })
+
+@app.route("/dashboard/logs", methods=["GET"])
+def dashboard_logs():
+    """Recent log entries for the web dashboard."""
+    limit = int(request.args.get("limit", 100))
+    with _log_lock:
+        entries = list(_log_buffer)[-limit:]
+    return jsonify(entries)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))

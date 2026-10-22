@@ -63,13 +63,14 @@ services:
       redis:
         condition: service_started
 
-  # ── SSH Server (Slave SAE) ──────────────────────────────────────────────
+  # ── SSH Server (Slave SAE - QKD Enabled) ────────────────────────────────
   server:
     build:
       context: ..
       dockerfile: docker/server/Dockerfile
     environment:
       SSH_PORT: "2222"
+      ENABLE_QKD: "true"
       SERVER_SAE_ID: server-sae
       KME_URL: http://kme-b:8000
       HOST_KEY_PATH: /certs/host_rsa_key
@@ -86,7 +87,51 @@ services:
       kme-b:
         condition: service_started
 
-  # ── SSH Client (Master SAE) ──────────────────────────────────────────────
+  # ── SSH Server 2 (No-KME Fallback Node) ──────────────────────────────────
+  server2:
+    build:
+      context: ..
+      dockerfile: docker/server/Dockerfile
+    environment:
+      SSH_PORT: "2222"
+      ENABLE_QKD: "false"
+      KME_URL: ""
+      HOST_KEY_PATH: /certs/host_rsa_key
+      AUTHORIZED_USERS: "client-sae:secret"
+    ports:
+      - "2223:2222"
+    volumes:
+      - certs:/certs:ro
+    networks:
+      - qkd-net
+    depends_on:
+      ca:
+        condition: service_completed_successfully
+
+  # ── Real-Time Web Dashboard ─────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/dashboard/Dockerfile
+    environment:
+      PORT: "5000"
+      KME_A_URL: http://kme-a:8000
+      KME_B_URL: http://kme-b:8000
+      SERVER_HOST: server
+      SERVER_PORT: "2222"
+      SERVER2_HOST: server2
+      SERVER2_PORT: "2222"
+    ports:
+      - "5000:5000"
+    networks:
+      - qkd-net
+    depends_on:
+      - kme-a
+      - kme-b
+      - server
+      - server2
+
+  # ── SSH Client (Master SAE - Targets Server 1) ───────────────────────────
   client:
     build:
       context: ..
@@ -108,6 +153,32 @@ services:
       - qkd-net
     depends_on:
       server:
+        condition: service_started
+      kme-a:
+        condition: service_started
+
+  # ── SSH Client (Targets Server 2 - Classical Fallback Demo) ──────────────
+  client-server2:
+    build:
+      context: ..
+      dockerfile: docker/client/Dockerfile
+    environment:
+      SSH_HOST: server2
+      SSH_PORT: "2222"
+      SSH_USERNAME: client-sae
+      TARGET_SAE_ID: server-sae
+      KME_URL: http://kme-a:8000
+      SSH_PASSWORD: secret
+      QKD_MIN_AVAILABLE_KEYS: "2"
+      VERBOSE: "1"
+    profiles:
+      - client
+    volumes:
+      - certs:/certs:ro
+    networks:
+      - qkd-net
+    depends_on:
+      server2:
         condition: service_started
       kme-a:
         condition: service_started

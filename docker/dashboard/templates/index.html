@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ETSI GS QKD 014 · Demonstration Dashboard</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #121826;
+      --card-border: #1e293b;
+      --card-hover: #1e293b;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --cyan: #06b6d4;
+      --cyan-glow: rgba(6, 182, 212, 0.25);
+      --purple: #8b5cf6;
+      --purple-glow: rgba(139, 92, 246, 0.25);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.25);
+      --amber: #f59e0b;
+      --amber-glow: rgba(245, 158, 11, 0.25);
+      --red: #ef4444;
+      --terminal-bg: #030712;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      background: rgba(18, 24, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--cyan), var(--purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      font-weight: bold;
+      box-shadow: 0 0 15px var(--cyan-glow);
+    }
+    .brand-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .brand-subtitle {
+      font-size: 0.75rem;
+      color: var(--cyan);
+      font-family: monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .pulse-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--emerald);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: monospace;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      background: var(--emerald);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--emerald);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    .btn {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 0.45rem 0.9rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .btn:hover {
+      border-color: var(--cyan);
+      background: var(--card-hover);
+    }
+    nav.tabs {
+      display: flex;
+      background: rgba(18, 24, 38, 0.5);
+      border-bottom: 1px solid var(--card-border);
+      padding: 0 2rem;
+      gap: 0.5rem;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.85rem 1.25rem;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
+    }
+    main {
+      flex: 1;
+      padding: 1.5rem 2rem;
+      max-width: 1500px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    /* Cards & Grids */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: monospace;
+      text-transform: uppercase;
+    }
+    .badge-cyan { background: rgba(6, 182, 212, 0.15); color: var(--cyan); border: 1px solid rgba(6, 182, 212, 0.3); }
+    .badge-purple { background: rgba(139, 92, 246, 0.15); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.3); }
+    .badge-emerald { background: rgba(16, 185, 129, 0.15); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-amber { background: rgba(245, 158, 11, 0.15); color: var(--amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-red { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid rgba(239, 68, 68, 0.3); }
+
+    /* Stat Box */
+    .stat-box {
+      background: rgba(3, 7, 18, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 0.85rem;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      font-family: monospace;
+      color: var(--text);
+    }
+    .stat-sub {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    /* Key Pool Visual Meter */
+    .pool-slots {
+      display: grid;
+      grid-template-columns: repeat(10, 1fr);
+      gap: 0.4rem;
+      margin: 1rem 0;
+    }
+    .pool-slot {
+      height: 36px;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      font-family: monospace;
+      color: var(--text-muted);
+      transition: all 0.3s;
+    }
+    .pool-slot.filled {
+      background: linear-gradient(180deg, rgba(6, 182, 212, 0.3), rgba(16, 185, 129, 0.4));
+      border-color: var(--cyan);
+      color: #fff;
+      box-shadow: 0 0 10px var(--cyan-glow);
+    }
+    .pool-slot.popping {
+      background: linear-gradient(180deg, rgba(245, 158, 11, 0.5), rgba(239, 68, 68, 0.5));
+      border-color: var(--amber);
+      color: #fff;
+      animation: pulse 0.8s infinite;
+    }
+
+    /* Progress bar */
+    .prog-track {
+      background: #1e293b;
+      height: 8px;
+      border-radius: 9999px;
+      overflow: hidden;
+      margin: 0.5rem 0;
+    }
+    .prog-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), var(--emerald));
+      transition: width 0.4s ease;
+    }
+
+    /* Architecture diagram */
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      background: rgba(3, 7, 18, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      overflow-x: auto;
+    }
+    .arch-node {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 1rem;
+      min-width: 170px;
+      text-align: center;
+      position: relative;
+    }
+    .arch-node.master { border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-glow); }
+    .arch-node.slave { border-color: var(--purple); box-shadow: 0 0 12px var(--purple-glow); }
+    .arch-node.channel { border-color: var(--emerald); border-style: dashed; }
+    .arch-node.fallback { border-color: var(--amber); border-style: dotted; }
+    .arch-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.25rem; }
+    .arch-meta { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
+    .arch-arrow {
+      color: var(--text-muted);
+      font-size: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+      min-width: 60px;
+    }
+    .arrow-label {
+      font-size: 0.65rem;
+      color: var(--cyan);
+      font-family: monospace;
+      text-align: center;
+    }
+
+    /* Terminal logs */
+    .terminal-container {
+      background: var(--terminal-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      font-family: "JetBrains Mono", "Fira Code", monospace;
+      font-size: 0.8rem;
+      height: 380px;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .log-line {
+      display: flex;
+      gap: 0.65rem;
+      line-height: 1.4;
+      align-items: baseline;
+      word-break: break-all;
+    }
+    .log-ts { color: #64748b; font-size: 0.72rem; min-width: 58px; }
+    .log-badge {
+      font-size: 0.65rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-weight: 700;
+      min-width: 50px;
+      text-align: center;
+    }
+    .log-badge.KEY { background: rgba(6, 182, 212, 0.2); color: var(--cyan); }
+    .log-badge.CHALLENGE { background: rgba(139, 92, 246, 0.2); color: var(--purple); }
+    .log-badge.REFILL { background: rgba(16, 185, 129, 0.2); color: var(--emerald); }
+    .log-badge.REQ { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .log-badge.RESP { background: rgba(148, 163, 184, 0.2); color: #94a3b8; }
+    .log-badge.ERROR { background: rgba(239, 68, 68, 0.2); color: var(--red); }
+    .log-msg { color: #e2e8f0; flex: 1; }
+
+    /* Code & command boxes */
+    pre, code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.85rem;
+    }
+    .cmd-box {
+      background: rgba(3, 7, 18, 0.8);
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: #38bdf8;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 0.5rem 0;
+    }
+    .cmd-copy {
+      background: #1e293b;
+      border: none;
+      color: var(--text-muted);
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+    }
+    .cmd-copy:hover { color: #fff; }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 0.5rem;
+    }
+    th, td {
+      padding: 0.75rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 0.85rem;
+    }
+    th {
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      letter-spacing: 0.05em;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">
+      <div class="brand-icon">Ψ</div>
+      <div>
+        <div class="brand-title">ETSI GS QKD 014 Demonstration Dashboard</div>
+        <div class="brand-subtitle">Quantum-Secured SSH Transport & Classical Fallback</div>
+      </div>
+    </div>
+    <div class="header-controls">
+      <div class="pulse-pill" id="live-indicator">
+        <span class="dot"></span>
+        <span id="refresh-status">LIVE SYNC (1.0s)</span>
+      </div>
+      <button class="btn" id="btn-toggle-refresh" onclick="toggleRefresh()">Pause</button>
+      <button class="btn" onclick="fetchData()">Refresh Now</button>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="tabs">
+    <button class="tab-btn active" onclick="switchTab('overview')">🌐 Topology & Overview</button>
+    <button class="tab-btn" onclick="switchTab('kme-a')">🔵 KME-A (Master)</button>
+    <button class="tab-btn" onclick="switchTab('kme-b')">🟣 KME-B (Slave)</button>
+    <button class="tab-btn" onclick="switchTab('fallback')">⚡ Classical Fallback (Server2)</button>
+  </nav>
+
+  <main>
+    <!-- TAB 1: OVERVIEW & TOPOLOGY -->
+    <div id="tab-overview" class="tab-pane active">
+      <!-- Live Architecture Flow -->
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="arch-name">🖥️ Client (Master SAE)</div>
+          <div class="arch-meta">client-sae</div>
+          <div style="margin-top:0.4rem;"><span class="badge badge-cyan">Paramiko 5.0</span></div>
+        </div>
+
+        <div class="arch-arrow">
+          <span class="arrow-label">/enc_keys</span>
+          <span>⟶</span>
+        </div>
+
+        <div class="arch-node master">
+          <div class="arch-name">🔵 KME-A</div>
+          <div class="arch-meta" id="arch-kmea-meta">kme-a:8000</div>
+          <div style="margin-top:0.4rem;"><span class="badge badge-cyan" id="arch-kmea-badge">ONLINE</span></div>
+        </div>
+
+        <div class="arch-arrow">
+          <span class="arrow-label">Quantum Channel<br/>(Redis Sync)</span>
+          <span>⟷</span>
+        </div>
+
+        <div class="arch-node slave">
+          <div class="arch-name">🟣 KME-B</div>
+          <div class="arch-meta" id="arch-kmeb-meta">kme-b:8000</div>
+          <div style="margin-top:0.4rem;"><span class="badge badge-purple" id="arch-kmeb-badge">ONLINE</span></div>
+        </div>
+
+        <div class="arch-arrow">
+          <span class="arrow-label">/dec_keys<br/>(Challenge-Resp)</span>
+          <span>⟵</span>
+        </div>
+
+        <div class="arch-node">
+          <div class="arch-name">🛡️ Server 1 (QKD)</div>
+          <div class="arch-meta">server:2222</div>
+          <div style="margin-top:0.4rem;"><span class="badge badge-emerald" id="arch-server-badge">ONLINE</span></div>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Summary -->
+      <div class="grid-4">
+        <div class="card stat-box">
+          <div class="stat-label">Quantum Key Pool (KME-A)</div>
+          <div class="stat-value" id="stat-pool-count">-- / --</div>
+          <div class="prog-track"><div class="prog-fill" id="stat-pool-bar" style="width: 0%"></div></div>
+          <div class="stat-sub" id="stat-pool-sub">Refill rate: 1 key / 5s</div>
+        </div>
+
+        <div class="card stat-box">
+          <div class="stat-label">Keys Delivered (Master SAE)</div>
+          <div class="stat-value" style="color: var(--cyan)" id="stat-keys-delivered">0</div>
+          <div class="stat-sub">Via POST /enc_keys</div>
+        </div>
+
+        <div class="card stat-box">
+          <div class="stat-label">Challenges Verified (KME-B)</div>
+          <div class="stat-value" style="color: var(--purple)" id="stat-challenges-verified">0</div>
+          <div class="stat-sub">X.509 ECDSA Auth Gate</div>
+        </div>
+
+        <div class="card stat-box">
+          <div class="stat-label">Keys Consumed (One-Time-Use)</div>
+          <div class="stat-value" style="color: var(--emerald)" id="stat-keys-consumed">0</div>
+          <div class="stat-sub">Permanently purged via GETDEL</div>
+        </div>
+      </div>
+
+      <!-- Live Server Node Status -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🛡️ Node 1: SSH Server (QKD Enabled)</div>
+            <span class="badge badge-emerald" id="badge-node-server">ACTIVE</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+            Attached to <strong>KME-B</strong>. Authenticates via CA certificate and signs cryptographic challenges to retrieve quantum key material.
+          </p>
+          <div class="stat-box" style="margin-bottom: 0.75rem;">
+            <div class="stat-label">Negotiated KEX Algorithm</div>
+            <div style="font-family: monospace; font-size: 1.1rem; color: var(--cyan); font-weight: 700;">
+              qkd-etsi014-sha256
+            </div>
+          </div>
+          <div class="cmd-box">
+            <code>docker compose run --rm client</code>
+            <button class="cmd-copy" onclick="copyText('docker compose run --rm client')">Copy</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚡ Node 2: SSH Server 2 (No-KME Fallback)</div>
+            <span class="badge badge-amber" id="badge-node-server2">FALLBACK READY</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 0.75rem;">
+            No KME attached. When our upgraded Paramiko client connects, it detects absence of QKD and <strong>gracefully negotiates classical/PQC key exchange</strong>.
+          </p>
+          <div class="stat-box" style="margin-bottom: 0.75rem;">
+            <div class="stat-label">Fallback Negotiated Algorithm</div>
+            <div style="font-family: monospace; font-size: 1.1rem; color: var(--amber); font-weight: 700;">
+              mlkem768x25519-sha256
+            </div>
+          </div>
+          <div class="cmd-box">
+            <code>docker compose run --rm client-server2</code>
+            <button class="cmd-copy" onclick="copyText('docker compose run --rm client-server2')">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Combined Recent Logs -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📜 Real-Time Protocol Event Stream</div>
+          <span class="badge badge-cyan">KME-A & KME-B</span>
+        </div>
+        <div class="terminal-container" id="terminal-overview">
+          <div style="color: #64748b; font-style: italic;">Connecting to log stream...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: KME-A (MASTER KME) -->
+    <div id="tab-kme-a" class="tab-pane">
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🔵 KME-A Pool Depth (10-Slot Reservoir)</div>
+            <span class="badge badge-cyan" id="kmea-pool-badge">--/10</span>
+          </div>
+          <div class="pool-slots" id="kmea-slots">
+            <!-- 10 visual slots generated by JS -->
+          </div>
+          <div class="prog-track"><div class="prog-fill" id="kmea-prog" style="width: 0%"></div></div>
+          <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted); margin-top:0.4rem;">
+            <span>Refill: 1 key every 5s</span>
+            <span>Capacity: 10 Keys</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚙️ ETSI GS QKD 014 Parameters</div>
+            <span class="badge badge-cyan">Section 6</span>
+          </div>
+          <table>
+            <tr><td>Source KME ID</td><td id="kmea-id">KME-A</td></tr>
+            <tr><td>Target KME ID</td><td id="kmea-peer">KME-B</td></tr>
+            <tr><td>Master SAE ID</td><td id="kmea-master">client-sae</td></tr>
+            <tr><td>Key Size (Bits)</td><td id="kmea-keysize">256 bits</td></tr>
+            <tr><td>Total Requests</td><td id="kmea-reqs">0</td></tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🧪 ETSI REST Endpoints</div>
+            <span class="badge badge-emerald">HTTP/1.1</span>
+          </div>
+          <div style="font-size:0.8rem; display:flex; flex-direction:column; gap:0.6rem;">
+            <div>
+              <span class="badge badge-cyan">GET</span> <code style="color:#e2e8f0">/api/v1/keys/server-sae/status</code>
+              <div style="color:var(--text-muted); font-size:0.72rem;">Returns pool count & key size</div>
+            </div>
+            <div>
+              <span class="badge badge-purple">POST</span> <code style="color:#e2e8f0">/api/v1/keys/server-sae/enc_keys</code>
+              <div style="color:var(--text-muted); font-size:0.72rem;">Delivers new key_ID & 256-bit secret</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">💻 KME-A Real-Time Activity Log</div>
+          <button class="btn" onclick="clearLogs('kme-a')">Clear</button>
+        </div>
+        <div class="terminal-container" id="terminal-kme-a"></div>
+      </div>
+    </div>
+
+    <!-- TAB 3: KME-B (SLAVE KME) -->
+    <div id="tab-kme-b" class="tab-pane">
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🛡️ Challenge-Response Gate</div>
+            <span class="badge badge-purple">SECURITY GATE</span>
+          </div>
+          <div class="stat-box" style="margin-bottom:0.8rem;">
+            <div class="stat-label">Challenges Issued</div>
+            <div class="stat-value" id="kmeb-chall-issued">0</div>
+            <div class="stat-sub">Cryptographic nonces (30s TTL)</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Signatures Verified</div>
+            <div class="stat-value" style="color:var(--emerald)" id="kmeb-chall-verified">0</div>
+            <div class="stat-sub">Root CA-certified ECDSA signatures</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🗑️ One-Time-Pad Enforcement</div>
+            <span class="badge badge-emerald">ATOMIC GETDEL</span>
+          </div>
+          <div class="stat-box" style="margin-bottom:0.8rem;">
+            <div class="stat-label">Keys Permanently Consumed</div>
+            <div class="stat-value" style="color:var(--emerald)" id="kmeb-keys-consumed">0</div>
+            <div class="stat-sub">Purged immediately from Redis memory</div>
+          </div>
+          <p style="font-size:0.75rem; color:var(--text-muted); line-height:1.4;">
+            Prevents replay attacks. A delivered quantum key can only ever be decoded once by the certified Slave SAE.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">⚙️ KME-B Endpoints</div>
+            <span class="badge badge-purple">SLAVE API</span>
+          </div>
+          <div style="font-size:0.8rem; display:flex; flex-direction:column; gap:0.6rem;">
+            <div>
+              <span class="badge badge-cyan">GET</span> <code style="color:#e2e8f0">/api/v1/keys/challenge</code>
+              <div style="color:var(--text-muted); font-size:0.72rem;">Generates unique nonce challenge</div>
+            </div>
+            <div>
+              <span class="badge badge-purple">POST</span> <code style="color:#e2e8f0">/api/v1/keys/client-sae/dec_keys</code>
+              <div style="color:var(--text-muted); font-size:0.72rem;">Validates signature & delivers key via GETDEL</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">💻 KME-B Real-Time Activity Log</div>
+          <button class="btn" onclick="clearLogs('kme-b')">Clear</button>
+        </div>
+        <div class="terminal-container" id="terminal-kme-b"></div>
+      </div>
+    </div>
+
+    <!-- TAB 4: NO-KME FALLBACK NODE -->
+    <div id="tab-fallback" class="tab-pane">
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">
+          <div class="card-title">⚡ High-Availability Classical & Post-Quantum Fallback Architecture</div>
+          <span class="badge badge-amber">FAIL-SAFE DESIGN</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; margin-bottom: 1rem;">
+          In carrier networks, not every node will possess a dedicated QKD link. Our Paramiko implementation supports <strong>seamless protocol negotiation fallback</strong>: if the target server does not advertise <code>qkd-etsi014-sha256</code>, or if the local quantum key pool is depleted below threshold, the SSH transport automatically negotiates the next highest priority algorithm without dropping the session.
+        </p>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Target Node</th>
+              <th>Container Host</th>
+              <th>KME Attached</th>
+              <th>Offered KEX</th>
+              <th>Negotiated KEX</th>
+              <th>Security Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>SSH Server 1</strong></td>
+              <td><code>server:2222</code></td>
+              <td><span class="badge badge-purple">KME-B (Slave)</span></td>
+              <td><code>qkd-etsi014-sha256</code></td>
+              <td><strong style="color:var(--cyan)">qkd-etsi014-sha256</strong></td>
+              <td><span class="badge badge-cyan">Quantum (ITS)</span></td>
+            </tr>
+            <tr>
+              <td><strong>SSH Server 2</strong></td>
+              <td><code>server2:2222</code></td>
+              <td><span class="badge badge-amber">None (No KME)</span></td>
+              <td><code>mlkem768x25519-sha256, curve25519</code></td>
+              <td><strong style="color:var(--amber)">mlkem768x25519-sha256</strong></td>
+              <td><span class="badge badge-amber">Post-Quantum (ML-KEM)</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🧪 Test 1: Connect to QKD Node (Server 1)</div>
+            <span class="badge badge-cyan">QKD MODE</span>
+          </div>
+          <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">
+            Both peers have KMEs. Negotiates <code>qkd-etsi014-sha256</code>.
+          </p>
+          <div class="cmd-box">
+            <code>docker compose run --rm client</code>
+            <button class="cmd-copy" onclick="copyText('docker compose run --rm client')">Copy</button>
+          </div>
+          <div style="font-family:monospace; font-size:0.75rem; color:#94a3b8; margin-top:0.5rem; background:#030712; padding:0.6rem; border-radius:6px;">
+            [SECURITY] Key Exchange Algorithm Negotiated: qkd-etsi014-sha256<br>
+            [STATUS] Connection is Quantum Key Distribution (QKD) SECURED! 🛡️
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🧪 Test 2: Connect to No-KME Node (Server 2)</div>
+            <span class="badge badge-amber">FALLBACK MODE</span>
+          </div>
+          <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">
+            Target has no KME. Automatically falls back to classical / post-quantum KEX.
+          </p>
+          <div class="cmd-box">
+            <code>docker compose run --rm client-server2</code>
+            <button class="cmd-copy" onclick="copyText('docker compose run --rm client-server2')">Copy</button>
+          </div>
+          <div style="font-family:monospace; font-size:0.75rem; color:#94a3b8; margin-top:0.5rem; background:#030712; padding:0.6rem; border-radius:6px;">
+            [SECURITY] Key Exchange Algorithm Negotiated: mlkem768x25519-sha256<br>
+            [STATUS] Connection fell back to classical/PQC key exchange.
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let isAutoRefresh = true;
+    let refreshInterval = null;
+
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+      event.target.classList.add('active');
+      const pane = document.getElementById('tab-' + tabId);
+      if (pane) pane.classList.add('active');
+    }
+
+    function toggleRefresh() {
+      isAutoRefresh = !isAutoRefresh;
+      const btn = document.getElementById('btn-toggle-refresh');
+      const pill = document.getElementById('live-indicator');
+      const statusText = document.getElementById('refresh-status');
+      if (isAutoRefresh) {
+        btn.textContent = 'Pause';
+        pill.style.display = 'inline-flex';
+        statusText.textContent = 'LIVE SYNC (1.0s)';
+        startPolling();
+      } else {
+        btn.textContent = 'Resume';
+        pill.style.display = 'none';
+        if (refreshInterval) clearInterval(refreshInterval);
+      }
+    }
+
+    function copyText(txt) {
+      navigator.clipboard.writeText(txt);
+      alert('Copied to clipboard: ' + txt);
+    }
+
+    function renderSlots(containerId, count, max) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = '';
+      for (let i = 0; i < max; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'pool-slot' + (i < count ? ' filled' : '');
+        slot.textContent = (i + 1);
+        container.appendChild(slot);
+      }
+    }
+
+    function formatLogLine(entry) {
+      return `
+        <div class="log-line">
+          <span class="log-ts">${entry.ts || ''}</span>
+          <span class="log-badge ${entry.level || 'INFO'}">${entry.level || 'INFO'}</span>
+          <span class="log-msg">${escapeHtml(entry.msg || '')}</span>
+        </div>
+      `;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function updateTerminal(elemId, logs) {
+      const term = document.getElementById(elemId);
+      if (!term) return;
+      if (!logs || logs.length === 0) {
+        term.innerHTML = '<div style="color: #64748b; font-style: italic;">No log events yet.</div>';
+        return;
+      }
+      term.innerHTML = logs.map(formatLogLine).join('');
+      term.scrollTop = term.scrollHeight;
+    }
+
+    async function fetchData() {
+      try {
+        const res = await fetch('/api/overview');
+        const data = await res.json();
+
+        // Update KME-A stats
+        const a = data.kme_a;
+        if (a && !a.error) {
+          const pool = a.pool_size ?? 0;
+          const max = a.max_pool ?? 10;
+          const pct = Math.round((pool / max) * 100);
+
+          document.getElementById('stat-pool-count').textContent = `${pool} / ${max}`;
+          document.getElementById('stat-pool-bar').style.width = pct + '%';
+          document.getElementById('stat-keys-delivered').textContent = a.keys_delivered ?? 0;
+
+          document.getElementById('kmea-pool-badge').textContent = `${pool}/${max} (${pct}%)`;
+          document.getElementById('kmea-prog').style.width = pct + '%';
+          renderSlots('kmea-slots', pool, max);
+
+          document.getElementById('kmea-id').textContent = a.kme_id || 'KME-A';
+          document.getElementById('kmea-peer').textContent = a.peer_kme_id || 'KME-B';
+          document.getElementById('kmea-master').textContent = a.master_sae_id || 'client-sae';
+          document.getElementById('kmea-keysize').textContent = (a.key_size_bits || 256) + ' bits';
+          document.getElementById('kmea-reqs').textContent = a.total_requests ?? 0;
+
+          document.getElementById('arch-kmea-badge').textContent = 'ONLINE';
+          document.getElementById('arch-kmea-badge').className = 'badge badge-cyan';
+        } else {
+          document.getElementById('arch-kmea-badge').textContent = 'OFFLINE';
+          document.getElementById('arch-kmea-badge').className = 'badge badge-red';
+        }
+
+        // Update KME-B stats
+        const b = data.kme_b;
+        if (b && !b.error) {
+          document.getElementById('stat-challenges-verified').textContent = b.challenges_verified ?? 0;
+          document.getElementById('stat-keys-consumed').textContent = b.keys_consumed ?? 0;
+
+          document.getElementById('kmeb-chall-issued').textContent = b.challenges_issued ?? 0;
+          document.getElementById('kmeb-chall-verified').textContent = b.challenges_verified ?? 0;
+          document.getElementById('kmeb-keys-consumed').textContent = b.keys_consumed ?? 0;
+
+          document.getElementById('arch-kmeb-badge').textContent = 'ONLINE';
+          document.getElementById('arch-kmeb-badge').className = 'badge badge-purple';
+        } else {
+          document.getElementById('arch-kmeb-badge').textContent = 'OFFLINE';
+          document.getElementById('arch-kmeb-badge').className = 'badge badge-red';
+        }
+
+        // Update Server Nodes
+        const s = data.nodes?.server;
+        if (s) {
+          document.getElementById('badge-node-server').textContent = s.online ? 'ONLINE (2222)' : 'OFFLINE';
+          document.getElementById('badge-node-server').className = s.online ? 'badge badge-emerald' : 'badge badge-red';
+          document.getElementById('arch-server-badge').textContent = s.online ? 'ONLINE' : 'OFFLINE';
+          document.getElementById('arch-server-badge').className = s.online ? 'badge badge-emerald' : 'badge badge-red';
+        }
+
+        const s2 = data.nodes?.server2;
+        if (s2) {
+          document.getElementById('badge-node-server2').textContent = s2.online ? 'ONLINE (CLASSICAL)' : 'OFFLINE';
+          document.getElementById('badge-node-server2').className = s2.online ? 'badge badge-amber' : 'badge badge-red';
+        }
+
+        // Fetch logs
+        const [logsA, logsB] = await Promise.all([
+          fetch('/api/logs/kme-a?limit=60').then(r => r.json()).catch(() => []),
+          fetch('/api/logs/kme-b?limit=60').then(r => r.json()).catch(() => [])
+        ]);
+
+        updateTerminal('terminal-kme-a', logsA);
+        updateTerminal('terminal-kme-b', logsB);
+
+        // Merge logs for overview tab
+        const combined = [...logsA, ...logsB].sort((x, y) => (x.ts > y.ts ? 1 : -1));
+        updateTerminal('terminal-overview', combined.slice(-80));
+
+      } catch (err) {
+        console.warn('Dashboard poll error:', err);
+      }
+    }
+
+    function clearLogs(target) {
+      if (target === 'kme-a') document.getElementById('terminal-kme-a').innerHTML = '';
+      if (target === 'kme-b') document.getElementById('terminal-kme-b').innerHTML = '';
+    }
+
+    function startPolling() {
+      if (refreshInterval) clearInterval(refreshInterval);
+      refreshInterval = setInterval(fetchData, 1000);
+    }
+
+    // Initial load
+    fetchData();
+    startPolling();
+  </script>
+</body>
+</html>

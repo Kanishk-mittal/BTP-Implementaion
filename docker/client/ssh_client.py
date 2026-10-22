@@ -75,8 +75,11 @@ def main():
 
     if kex_name == "qkd-etsi014-sha256":
         print("[STATUS] Connection is Quantum Key Distribution (QKD) SECURED! 🛡️")
+        print("         Root secret derived from ETSI GS QKD 014 Quantum Key material.")
     else:
-        print("[STATUS] Connection fell back to classical key exchange.")
+        print("[STATUS] Connection fell back to classical/PQC key exchange.")
+        print(f"         Target '{host}' does not negotiate QKD or keys were unavailable.")
+        print(f"         Successfully established encrypted session using: {kex_name}")
 
     # Execute a test command
     test_cmd = "uname -a && echo 'QKD SSH Session Verification OK'"
