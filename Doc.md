@@ -23,7 +23,7 @@ flowchart TD
 
     subgraph QKD_Infrastructure["Quantum Key Distribution Layer"]
         KMEA["KME-A (Master)<br/>ETSI GS QKD 014 REST<br/>Port 8000"]
-        QLink["Simulated Quantum Channel<br/>(Redis Sync - 1 key / 5s)"]
+        QLink["Simulated Quantum Channel<br/>(Redis Sync - 1 key / 5s, detected within 0.5s)"]
         KMEB["KME-B (Slave)<br/>ETSI GS QKD 014 + Auth Gate<br/>Port 8001"]
         KMEA <-->|Continuous Key Sync| QLink
         QLink <-->|Continuous Key Sync| KMEB
@@ -140,7 +140,7 @@ QKD SSH Session Verification OK
 1. **Key Pool Decrement**: Watch Slot 10 change as `stored_key_count` drops from `10` to `9`.
 2. **KME-A Log**: Shows `Pop/Deliver key d426b625... to server-sae | Remaining: 9/10`.
 3. **KME-B Log**: Shows `Challenge verified for client-sae. Key d426b625... consumed & deleted (one-time-use)`.
-4. **Replenishment**: After 5 seconds, watch the 10th slot light back up as `[QKD-REFILL]` generates a fresh key.
+4. **Replenishment**: Within ~0.5s the pool drops below capacity, then the refill loop generates a fresh key. The next key won't be generated for another 5 seconds (rate enforced after each generation).
 
 ---
 

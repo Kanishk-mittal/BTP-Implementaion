@@ -8,7 +8,7 @@ Environment variables:
   MASTER_SAE_ID      Authorized master SAE ID
   KEY_SIZE_BITS      Key size in bits (default: 256)
   MAX_POOL_SIZE      Maximum pool depth (default: 10)
-  REFILL_RATE        Keys added per second (default: 2)
+  REFILL_RATE        Keys added per second (e.g. 0.2 = 1 key/5s, 2 = 1 key/0.5s)
   ENABLE_CHALLENGE   Enable challenge-response for dec_keys (default: false)
   CA_CERT_FILE       Path to CA cert for verifying SAE identities
 """
@@ -67,7 +67,8 @@ def _log(msg: str, level: str = "INFO"):
 
 
 def _refill_loop():
-    interval = 1.0 / REFILL_RATE if REFILL_RATE > 0 else 0.5
+    interval = 1.0 / REFILL_RATE if REFILL_RATE > 0 else 5.0
+    poll_interval = min(0.5, interval / 2)  # how often to check when pool is already full
     while True:
         try:
             current_len = r.llen(POOL_LIST)
@@ -77,10 +78,13 @@ def _refill_loop():
                 key_b64 = base64.b64encode(key_bytes).decode("ascii")
                 r.set(KEY_HASH_PFX + kid, key_b64)
                 new_len = r.rpush(POOL_LIST, kid)
-                _log(f"+ Generated key {kid[:8]}... | Pool: {new_len}/{MAX_POOL} (interval: {interval:.1f}s)", "REFILL")
+                _log(f"+ Generated key {kid[:8]}... | Pool: {new_len}/{MAX_POOL} (rate: 1 key/{interval:.1f}s)", "REFILL")
+                time.sleep(interval)  # enforce rate limit ONLY after generating a key
+            else:
+                time.sleep(poll_interval)  # poll quickly while pool is full
         except Exception as e:
             _log(f"Error in refill loop: {e}", "ERROR")
-        time.sleep(interval)
+            time.sleep(1.0)
 
 # Only start background refill on one of the KMEs or if master KME
 if os.getenv("START_REFILL", "true").lower() in ("1", "true", "yes"):
