@@ -68,8 +68,8 @@ def _log(msg: str, level: str = "INFO"):
 
 def _refill_loop():
     interval = 1.0 / REFILL_RATE if REFILL_RATE > 0 else 5.0
-    poll_interval = min(0.5, interval / 2)  # how often to check when pool is already full
     while True:
+        time.sleep(interval)  # fixed tick: check pool every interval seconds
         try:
             current_len = r.llen(POOL_LIST)
             if current_len < MAX_POOL:
@@ -78,13 +78,10 @@ def _refill_loop():
                 key_b64 = base64.b64encode(key_bytes).decode("ascii")
                 r.set(KEY_HASH_PFX + kid, key_b64)
                 new_len = r.rpush(POOL_LIST, kid)
-                _log(f"+ Generated key {kid[:8]}... | Pool: {new_len}/{MAX_POOL} (rate: 1 key/{interval:.1f}s)", "REFILL")
-                time.sleep(interval)  # enforce rate limit ONLY after generating a key
-            else:
-                time.sleep(poll_interval)  # poll quickly while pool is full
+                _log(f"+ Generated key {kid[:8]}... | Pool: {new_len}/{MAX_POOL} (tick: {interval:.1f}s)", "REFILL")
+            # pool full → do nothing this tick
         except Exception as e:
             _log(f"Error in refill loop: {e}", "ERROR")
-            time.sleep(1.0)
 
 # Only start background refill on one of the KMEs or if master KME
 if os.getenv("START_REFILL", "true").lower() in ("1", "true", "yes"):
