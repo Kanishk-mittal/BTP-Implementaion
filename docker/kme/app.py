@@ -67,7 +67,7 @@ def _log(msg: str, level: str = "INFO"):
 
 
 def _refill_loop():
-    interval = 1.0 / REFILL_RATE if REFILL_RATE > 0 else 5.0
+    interval = 7.0
     while True:
         time.sleep(interval)  # fixed tick: check pool every interval seconds
         try:
