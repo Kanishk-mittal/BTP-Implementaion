@@ -4,6 +4,7 @@ QKD-secured SSH Server using upgraded paramiko.
 """
 import logging
 import os
+import signal
 import socket
 import subprocess
 import sys
@@ -117,11 +118,28 @@ def main():
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", port))
     sock.listen(10)
+    sock.settimeout(1.0)
     server_mode_str = "QKD-Secured" if qkd_config else "Classical (No-KME)"
     print(f"[INFO] {server_mode_str} SSH Server listening on port {port}...")
 
+    def sigterm_handler(signum, frame):
+        print(f"[INFO] Received shutdown signal ({signum}), closing server socket...", flush=True)
+        try:
+            sock.close()
+        except Exception:
+            pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    signal.signal(signal.SIGINT, sigterm_handler)
+
     while True:
-        client, addr = sock.accept()
+        try:
+            client, addr = sock.accept()
+        except socket.timeout:
+            continue
+        except (OSError, ValueError):
+            break
         print(f"[INFO] Incoming connection from {addr}")
         t = threading.Thread(target=handle_client, args=(client, host_key, qkd_config), daemon=True)
         t.start()

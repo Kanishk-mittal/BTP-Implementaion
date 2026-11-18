@@ -17,6 +17,8 @@ import collections
 import json
 import logging
 import os
+import signal
+import sys
 import threading
 import time
 import uuid
@@ -26,6 +28,13 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from flask import Flask, jsonify, request
 import redis as redislib
+
+# Graceful shutdown handling on SIGTERM / SIGINT
+def _sigterm_handler(signum, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, _sigterm_handler)
+signal.signal(signal.SIGINT, _sigterm_handler)
 
 # Suppress noisy periodic HTTP request logging from Werkzeug
 logging.getLogger("werkzeug").setLevel(logging.ERROR)

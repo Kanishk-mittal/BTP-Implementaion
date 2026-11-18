@@ -5,10 +5,19 @@ Aggregates live metrics and logs from KME-A, KME-B, and SSH Server nodes.
 """
 import logging
 import os
+import signal
 import socket
+import sys
 import time
 from flask import Flask, jsonify, render_template, request
 import requests
+
+# Graceful shutdown handling on SIGTERM / SIGINT
+def _sigterm_handler(signum, frame):
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, _sigterm_handler)
+signal.signal(signal.SIGINT, _sigterm_handler)
 
 # Suppress noisy periodic HTTP request logging from Werkzeug
 logging.getLogger("werkzeug").setLevel(logging.ERROR)
