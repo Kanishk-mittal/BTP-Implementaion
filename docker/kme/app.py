@@ -15,6 +15,7 @@ Environment variables:
 import base64
 import collections
 import json
+import logging
 import os
 import threading
 import time
@@ -25,6 +26,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from flask import Flask, jsonify, request
 import redis as redislib
+
+# Suppress noisy periodic HTTP request logging from Werkzeug
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 app = Flask(__name__)
 r = redislib.Redis(
@@ -283,14 +287,6 @@ def dashboard_stats():
         "total_requests": s["total_requests"],
         "uptime_secs": uptime_secs,
     })
-
-@app.route("/dashboard/logs", methods=["GET"])
-def dashboard_logs():
-    """Recent log entries for the web dashboard."""
-    limit = int(request.args.get("limit", 100))
-    with _log_lock:
-        entries = list(_log_buffer)[-limit:]
-    return jsonify(entries)
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "8000"))

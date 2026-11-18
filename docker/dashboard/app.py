@@ -3,11 +3,15 @@
 ETSI GS QKD 014 Demonstration Dashboard Backend
 Aggregates live metrics and logs from KME-A, KME-B, and SSH Server nodes.
 """
+import logging
 import os
 import socket
 import time
 from flask import Flask, jsonify, render_template, request
 import requests
+
+# Suppress noisy periodic HTTP request logging from Werkzeug
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 app = Flask(__name__)
 
@@ -84,24 +88,6 @@ def api_overview():
             }
         }
     })
-
-@app.route("/api/logs/kme-a")
-def logs_kme_a():
-    limit = request.args.get("limit", 100)
-    try:
-        r = requests.get(f"{KME_A_URL}/dashboard/logs?limit={limit}", timeout=1.0)
-        return jsonify(r.json() if r.status_code == 200 else [])
-    except Exception:
-        return jsonify([])
-
-@app.route("/api/logs/kme-b")
-def logs_kme_b():
-    limit = request.args.get("limit", 100)
-    try:
-        r = requests.get(f"{KME_B_URL}/dashboard/logs?limit={limit}", timeout=1.0)
-        return jsonify(r.json() if r.status_code == 200 else [])
-    except Exception:
-        return jsonify([])
 
 @app.route("/api/demo/execute", methods=["GET", "POST"])
 def demo_execute():

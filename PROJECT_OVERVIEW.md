@@ -163,24 +163,6 @@ Provides ETSI GS QKD 014 REST API and dashboard telemetry:
   }
   ```
 
-#### 4. Dashboard Ring Buffer Logs
-- **Method & Route**: `GET /dashboard/logs?limit=100`
-- **Response Format (`application/json`)**: Array of log objects:
-  ```json
-  [
-    {
-      "ts": "16:01:05",
-      "level": "REQ",
-      "msg": ">>> POST /api/v1/keys/server-sae/enc_keys (from 172.28.0.7) | Body: {\"number\": 1, \"size\": 256}"
-    },
-    {
-      "ts": "16:01:05",
-      "level": "KEY",
-      "msg": "Pop/Deliver key d426b625... to server-sae | Pool remaining: 9/10"
-    }
-  ]
-  ```
-
 ---
 
 ### 3.2 KME-B (`http://kme-b:8000` / Host `http://localhost:8001`)
@@ -240,8 +222,8 @@ Provides the Slave KME key delivery interface with challenge-response verificati
   - `400 Bad Request`:
     - `{"message": "one or more keys specified are not found on KME"}`
 
-#### 4. Dashboard Telemetry & Logs
-- Routes: `GET /dashboard/stats` and `GET /dashboard/logs` (Identical schema to KME-A).
+#### 4. Dashboard Telemetry
+- Route: `GET /dashboard/stats` (Identical schema to KME-A).
 
 ---
 
@@ -286,8 +268,6 @@ Provides the Slave KME key delivery interface with challenge-response verificati
     }
   }
   ```
-- **`GET /api/logs/kme-a`**: Proxies `/dashboard/logs` from `http://kme-a:8000`.
-- **`GET /api/logs/kme-b`**: Proxies `/dashboard/logs` from `http://kme-b:8000`.
 - **`POST /api/demo/execute`**: Proxies execution commands from the browser UI to the Client API daemon (`http://client:8000/api/exec`).
 
 ---

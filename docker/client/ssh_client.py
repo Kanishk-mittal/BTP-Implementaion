@@ -20,6 +20,7 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logging.getLogger("paramiko").setLevel(log_level)
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 app = Flask(__name__)
 
