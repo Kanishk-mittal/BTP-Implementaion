@@ -272,50 +272,6 @@
       transition: width 0.4s ease;
     }
 
-    /* Architecture diagram */
-    .arch-flow {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      background: rgba(3, 7, 18, 0.6);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-      overflow-x: auto;
-    }
-    .arch-node {
-      background: var(--card-bg);
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      padding: 1rem;
-      min-width: 170px;
-      text-align: center;
-      position: relative;
-    }
-    .arch-node.master { border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-glow); }
-    .arch-node.slave { border-color: var(--purple); box-shadow: 0 0 12px var(--purple-glow); }
-    .arch-node.channel { border-color: var(--emerald); border-style: dashed; }
-    .arch-node.fallback { border-color: var(--amber); border-style: dotted; }
-    .arch-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.25rem; }
-    .arch-meta { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
-    .arch-arrow {
-      color: var(--text-muted);
-      font-size: 1.25rem;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.2rem;
-      min-width: 60px;
-    }
-    .arrow-label {
-      font-size: 0.65rem;
-      color: var(--cyan);
-      font-family: monospace;
-      text-align: center;
-    }
-
     /* Terminal logs */
     .terminal-container {
       background: var(--terminal-bg);
@@ -433,48 +389,6 @@
   <main>
     <!-- TAB 1: OVERVIEW & TOPOLOGY -->
     <div id="tab-overview" class="tab-pane active">
-      <!-- Live Architecture Flow -->
-      <div class="arch-flow">
-        <div class="arch-node">
-          <div class="arch-name">🖥️ Client (Master SAE)</div>
-          <div class="arch-meta">client-sae</div>
-          <div style="margin-top:0.4rem;"><span class="badge badge-cyan">Paramiko 5.0</span></div>
-        </div>
-
-        <div class="arch-arrow">
-          <span class="arrow-label">/enc_keys</span>
-          <span>⟶</span>
-        </div>
-
-        <div class="arch-node master">
-          <div class="arch-name">🔵 KME-A</div>
-          <div class="arch-meta" id="arch-kmea-meta">kme-a:8000</div>
-          <div style="margin-top:0.4rem;"><span class="badge badge-cyan" id="arch-kmea-badge">ONLINE</span></div>
-        </div>
-
-        <div class="arch-arrow">
-          <span class="arrow-label">Quantum Channel<br/>(Redis Sync)</span>
-          <span>⟷</span>
-        </div>
-
-        <div class="arch-node slave">
-          <div class="arch-name">🟣 KME-B</div>
-          <div class="arch-meta" id="arch-kmeb-meta">kme-b:8000</div>
-          <div style="margin-top:0.4rem;"><span class="badge badge-purple" id="arch-kmeb-badge">ONLINE</span></div>
-        </div>
-
-        <div class="arch-arrow">
-          <span class="arrow-label">/dec_keys<br/>(Challenge-Resp)</span>
-          <span>⟵</span>
-        </div>
-
-        <div class="arch-node">
-          <div class="arch-name">🛡️ Server 1 (QKD)</div>
-          <div class="arch-meta">server:2222</div>
-          <div style="margin-top:0.4rem;"><span class="badge badge-emerald" id="arch-server-badge">ONLINE</span></div>
-        </div>
-      </div>
-
       <!-- Quick Metrics Summary -->
       <div class="grid-4">
         <div class="card stat-box">
@@ -519,10 +433,11 @@
               qkd-etsi014-sha256
             </div>
           </div>
-          <div class="cmd-box">
-            <code>docker compose run --rm client</code>
-            <button class="cmd-copy" onclick="copyText('docker compose run --rm client')">Copy</button>
+          <div style="display: flex; gap: 0.5rem; margin: 0.75rem 0;">
+            <input type="text" id="cmd-server" value="whoami" placeholder="Enter shell command..." style="flex:1; background: #030712; border: 1px solid #334155; color: #38bdf8; padding: 0.5rem 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" />
+            <button class="btn" id="btn-run-server" style="background: linear-gradient(135deg, var(--cyan), #0284c7); color: #fff; font-weight: 700; border: none; padding: 0.5rem 1rem;" onclick="runDemo('server', 'cmd-server', 'result-server', 'btn-run-server')">▶ Run QKD Demo</button>
           </div>
+          <div id="result-server" style="display:none; margin: 0.5rem 0; padding: 0.75rem; background: #030712; border: 1px solid #1e293b; border-radius: 6px; font-family: monospace; font-size: 0.8rem;"></div>
         </div>
 
         <div class="card">
@@ -539,21 +454,11 @@
               mlkem768x25519-sha256
             </div>
           </div>
-          <div class="cmd-box">
-            <code>docker compose run --rm client-server2</code>
-            <button class="cmd-copy" onclick="copyText('docker compose run --rm client-server2')">Copy</button>
+          <div style="display: flex; gap: 0.5rem; margin: 0.75rem 0;">
+            <input type="text" id="cmd-server2" value="whoami" placeholder="Enter shell command..." style="flex:1; background: #030712; border: 1px solid #334155; color: #f59e0b; padding: 0.5rem 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" />
+            <button class="btn" id="btn-run-server2" style="background: linear-gradient(135deg, var(--amber), #d97706); color: #fff; font-weight: 700; border: none; padding: 0.5rem 1rem;" onclick="runDemo('server2', 'cmd-server2', 'result-server2', 'btn-run-server2')">▶ Run Fallback Demo</button>
           </div>
-        </div>
-      </div>
-
-      <!-- Live Combined Recent Logs -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">📜 Real-Time Protocol Event Stream</div>
-          <span class="badge badge-cyan">KME-A & KME-B</span>
-        </div>
-        <div class="terminal-container" id="terminal-overview">
-          <div style="color: #64748b; font-style: italic;">Connecting to log stream...</div>
+          <div id="result-server2" style="display:none; margin: 0.5rem 0; padding: 0.75rem; background: #030712; border: 1px solid #1e293b; border-radius: 6px; font-family: monospace; font-size: 0.8rem;"></div>
         </div>
       </div>
     </div>
@@ -731,6 +636,11 @@
           <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">
             Both peers have KMEs. Negotiates <code>qkd-etsi014-sha256</code>.
           </p>
+          <div style="display: flex; gap: 0.5rem; margin: 0.75rem 0;">
+            <input type="text" id="cmd-tab4-server" value="whoami" placeholder="Enter shell command..." style="flex:1; background: #030712; border: 1px solid #334155; color: #38bdf8; padding: 0.5rem 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" />
+            <button class="btn" id="btn-tab4-server" style="background: linear-gradient(135deg, var(--cyan), #0284c7); color: #fff; font-weight: 700; border: none; padding: 0.5rem 1rem;" onclick="runDemo('server', 'cmd-tab4-server', 'result-tab4-server', 'btn-tab4-server')">▶ Run Test 1</button>
+          </div>
+          <div id="result-tab4-server" style="display:none; margin: 0.5rem 0; padding: 0.75rem; background: #030712; border: 1px solid #1e293b; border-radius: 6px; font-family: monospace; font-size: 0.8rem;"></div>
           <div class="cmd-box">
             <code>docker compose run --rm client</code>
             <button class="cmd-copy" onclick="copyText('docker compose run --rm client')">Copy</button>
@@ -749,6 +659,11 @@
           <p style="color:var(--text-muted); font-size:0.8rem; margin-bottom:0.5rem;">
             Target has no KME. Automatically falls back to classical / post-quantum KEX.
           </p>
+          <div style="display: flex; gap: 0.5rem; margin: 0.75rem 0;">
+            <input type="text" id="cmd-tab4-server2" value="whoami" placeholder="Enter shell command..." style="flex:1; background: #030712; border: 1px solid #334155; color: #f59e0b; padding: 0.5rem 0.75rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem;" />
+            <button class="btn" id="btn-tab4-server2" style="background: linear-gradient(135deg, var(--amber), #d97706); color: #fff; font-weight: 700; border: none; padding: 0.5rem 1rem;" onclick="runDemo('server2', 'cmd-tab4-server2', 'result-tab4-server2', 'btn-tab4-server2')">▶ Run Test 2</button>
+          </div>
+          <div id="result-tab4-server2" style="display:none; margin: 0.5rem 0; padding: 0.75rem; background: #030712; border: 1px solid #1e293b; border-radius: 6px; font-family: monospace; font-size: 0.8rem;"></div>
           <div class="cmd-box">
             <code>docker compose run --rm client-server2</code>
             <button class="cmd-copy" onclick="copyText('docker compose run --rm client-server2')">Copy</button>
@@ -858,12 +773,6 @@
           document.getElementById('kmea-master').textContent = a.master_sae_id || 'client-sae';
           document.getElementById('kmea-keysize').textContent = (a.key_size_bits || 256) + ' bits';
           document.getElementById('kmea-reqs').textContent = a.total_requests ?? 0;
-
-          document.getElementById('arch-kmea-badge').textContent = 'ONLINE';
-          document.getElementById('arch-kmea-badge').className = 'badge badge-cyan';
-        } else {
-          document.getElementById('arch-kmea-badge').textContent = 'OFFLINE';
-          document.getElementById('arch-kmea-badge').className = 'badge badge-red';
         }
 
         // Update KME-B stats
@@ -875,12 +784,6 @@
           document.getElementById('kmeb-chall-issued').textContent = b.challenges_issued ?? 0;
           document.getElementById('kmeb-chall-verified').textContent = b.challenges_verified ?? 0;
           document.getElementById('kmeb-keys-consumed').textContent = b.keys_consumed ?? 0;
-
-          document.getElementById('arch-kmeb-badge').textContent = 'ONLINE';
-          document.getElementById('arch-kmeb-badge').className = 'badge badge-purple';
-        } else {
-          document.getElementById('arch-kmeb-badge').textContent = 'OFFLINE';
-          document.getElementById('arch-kmeb-badge').className = 'badge badge-red';
         }
 
         // Update Server Nodes
@@ -888,8 +791,6 @@
         if (s) {
           document.getElementById('badge-node-server').textContent = s.online ? 'ONLINE (2222)' : 'OFFLINE';
           document.getElementById('badge-node-server').className = s.online ? 'badge badge-emerald' : 'badge badge-red';
-          document.getElementById('arch-server-badge').textContent = s.online ? 'ONLINE' : 'OFFLINE';
-          document.getElementById('arch-server-badge').className = s.online ? 'badge badge-emerald' : 'badge badge-red';
         }
 
         const s2 = data.nodes?.server2;
@@ -907,12 +808,68 @@
         updateTerminal('terminal-kme-a', logsA);
         updateTerminal('terminal-kme-b', logsB);
 
-        // Merge logs for overview tab
-        const combined = [...logsA, ...logsB].sort((x, y) => (x.ts > y.ts ? 1 : -1));
-        updateTerminal('terminal-overview', combined.slice(-80));
-
       } catch (err) {
         console.warn('Dashboard poll error:', err);
+      }
+    }
+
+    async function runDemo(target, inputId, resultId, btnId) {
+      const input = document.getElementById(inputId);
+      const resultDiv = document.getElementById(resultId);
+      const btn = document.getElementById(btnId);
+      const command = (input && input.value.trim()) ? input.value.trim() : "whoami";
+
+      if (btn) {
+        btn.disabled = true;
+        btn.dataset.originalText = btn.textContent;
+        btn.innerHTML = '⏳ Connecting...';
+      }
+
+      if (resultDiv) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `<span style="color: #94a3b8;">Connecting to ${escapeHtml(target)}:2222 and executing '<code>${escapeHtml(command)}</code>'...</span>`;
+      }
+
+      try {
+        const res = await fetch('/api/demo/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: target, command: command })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          const kexBadge = data.is_qkd 
+            ? `<span class="badge badge-cyan" style="font-size:0.75rem;">🛡️ QKD SECURED (${data.kex_algo})</span>`
+            : `<span class="badge badge-amber" style="font-size:0.75rem;">⚡ FALLBACK (${data.kex_algo})</span>`;
+          
+          resultDiv.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.4rem;">
+              <div>${kexBadge}</div>
+              <span style="color:#64748b; font-size:0.75rem;">${data.elapsed_ms}ms · exit ${data.exit_status ?? 0}</span>
+            </div>
+            <div style="color:#94a3b8; font-size:0.75rem; margin-bottom:0.25rem;">$ ${escapeHtml(data.command)}</div>
+            <pre style="color:#e2e8f0; margin:0; white-space:pre-wrap; background:rgba(0,0,0,0.4); padding:0.4rem; border-radius:4px;">${escapeHtml(data.stdout || '(no output)')}${data.stderr ? '\n[stderr] ' + escapeHtml(data.stderr) : ''}</pre>
+          `;
+        } else {
+          resultDiv.innerHTML = `
+            <div style="color:var(--red); font-weight:bold; margin-bottom:0.25rem;">❌ Connection / Execution Failed</div>
+            <div style="color:#fca5a5; font-size:0.75rem;">${escapeHtml(data.error || 'Unknown error occurred')}</div>
+          `;
+        }
+
+        // Instantly trigger metric and log fetch so dashboard visuals update synchronously
+        fetchData();
+
+      } catch (err) {
+        if (resultDiv) {
+          resultDiv.innerHTML = `<div style="color:var(--red);">Request Error: ${escapeHtml(err.message)}</div>`;
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = btn.dataset.originalText || '▶ Run Demo';
+        }
       }
     }
 

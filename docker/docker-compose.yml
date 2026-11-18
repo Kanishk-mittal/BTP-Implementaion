@@ -117,6 +117,7 @@ services:
       PORT: "5000"
       KME_A_URL: http://kme-a:8000
       KME_B_URL: http://kme-b:8000
+      CLIENT_URL: http://client:8000
       SERVER_HOST: server
       SERVER_PORT: "2222"
       SERVER2_HOST: server2
@@ -130,13 +131,15 @@ services:
       - kme-b
       - server
       - server2
+      - client
 
-  # ── SSH Client (Master SAE - Targets Server 1) ───────────────────────────
+  # ── SSH Client (Master SAE - Persistent API Daemon) ─────────────────────
   client:
     build:
       context: ..
       dockerfile: docker/client/Dockerfile
     environment:
+      PORT: "8000"
       SSH_HOST: server
       SSH_PORT: "2222"
       SSH_USERNAME: client-sae
@@ -145,14 +148,16 @@ services:
       SSH_PASSWORD: secret
       QKD_MIN_AVAILABLE_KEYS: "2"
       VERBOSE: "1"
-    profiles:
-      - client
+    ports:
+      - "8002:8000"
     volumes:
       - certs:/certs:ro
     networks:
       - qkd-net
     depends_on:
       server:
+        condition: service_started
+      server2:
         condition: service_started
       kme-a:
         condition: service_started

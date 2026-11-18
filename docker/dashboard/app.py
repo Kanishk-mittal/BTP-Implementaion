@@ -13,6 +13,7 @@ app = Flask(__name__)
 
 KME_A_URL = os.getenv("KME_A_URL", "http://kme-a:8000")
 KME_B_URL = os.getenv("KME_B_URL", "http://kme-b:8000")
+CLIENT_URL = os.getenv("CLIENT_URL", "http://client:8000")
 SERVER_HOST = os.getenv("SERVER_HOST", "server")
 SERVER_PORT = int(os.getenv("SERVER_PORT", "2222"))
 SERVER2_HOST = os.getenv("SERVER2_HOST", "server2")
@@ -101,6 +102,30 @@ def logs_kme_b():
         return jsonify(r.json() if r.status_code == 200 else [])
     except Exception:
         return jsonify([])
+
+@app.route("/api/demo/execute", methods=["GET", "POST"])
+def demo_execute():
+    """Trigger an on-demand SSH session from the client container."""
+    payload = request.get_json(silent=True) or {}
+    target = request.args.get("target") or payload.get("target") or "server"
+    command = request.args.get("command") or payload.get("command") or "whoami"
+
+    try:
+        r = requests.post(
+            f"{CLIENT_URL}/api/exec",
+            json={"target": target, "command": command},
+            timeout=15.0,
+        )
+        return jsonify(r.json()), r.status_code
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "target": target,
+            "command": command,
+            "error": f"Failed to contact client API at {CLIENT_URL}: {e}",
+            "kex_algo": "unknown",
+            "is_qkd": False,
+        }), 502
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", "5000"))
